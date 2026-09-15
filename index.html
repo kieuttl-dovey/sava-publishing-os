@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SAVA Publishing OS</title>
+  <meta name="description" content="Publishing operating system for partner selection, deal making, market intelligence, game selection, sourcing and publishing operations." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">S</div>
+        <div><strong>SAVA</strong><span>Publishing OS</span></div>
+      </div>
+      <nav id="mainNav" class="nav"></nav>
+      <div class="sidebar-footer">
+        <button class="ghost full" data-action="open-sync">↻ GitHub Sync</button>
+        <small id="saveState">Local autosave</small>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="pageEyebrow">Publishing Operating System</p>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <div class="top-actions">
+          <input id="globalSearch" class="search" type="search" placeholder="Search partner / game / project..." />
+          <button class="ghost" data-action="export-json">Export</button>
+          <label class="ghost file-button">Import<input id="importJson" type="file" accept="application/json" /></label>
+          <button class="primary" data-action="quick-add">+ Add</button>
+        </div>
+      </header>
+      <section id="content" class="content"></section>
+    </main>
+  </div>
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root"></div>
+  <script src="data/seed.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

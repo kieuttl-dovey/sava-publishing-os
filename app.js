@@ -162,6 +162,16 @@
     return {market,product,prescan,final,stage,hard,recommendation};
   }
   function riskLevel(score){ const s=num(score); return s===null?'—':s>=9?'Nghiêm trọng':s>=6?'Cao':s>=3?'Trung bình':'Thấp'; }
+  function nextRiskId(){
+    const max=(db.partnerRisks||[]).reduce((m,r)=>{const hit=String(r.id||'').match(/(\d+)$/);return Math.max(m,hit?Number(hit[1]):0);},0);
+    return `RISK-${String(max+1).padStart(3,'0')}`;
+  }
+  function partnerRiskStats(partnerId){
+    const all=(db.partnerRisks||[]).filter(r=>r.partnerId===partnerId);
+    const open=all.filter(r=>r.status!=='Đã đóng');
+    const high=open.filter(r=>['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score)));
+    return {all,open,high};
+  }
 
   function nav(){
     $('#mainNav').innerHTML=NAV.map(([id,n,label])=>`<button data-nav="${id}" class="${currentView===id?'active':''}"><span class="num">${n}</span>${label}</button>`).join('');
@@ -216,11 +226,18 @@
 
   function renderPartners(){
     setHeader('Partner Selection','1 · Playbook lựa chọn đối tác');
-    const rows=db.partners.filter(p=>includesSearch(p.id,profile(p,'Tên Partner / Studio'),profile(p,'Genre chính'),profile(p,'Trạng thái'))).map(p=>{const d=partnerDerived(p);return `<tr><td><button class="linkish" data-open-partner="${p.id}">${p.id}</button></td><td><b>${esc(profile(p,'Tên Partner / Studio'))}</b><div class="small muted">${esc(profile(p,'Quốc gia')||'')} · ${esc(profile(p,'Quy mô team')||'')}</div></td><td>${esc(profile(p,'Genre chính')||'—')}</td><td>${badge(profile(p,'Trạng thái')||'—')}</td><td>${badge(d.hard)}</td><td class="num">${pct(d.coverage,0)}</td><td>${badge(d.confidence)}</td><td><div class="score-row"><strong>${d.fit??'—'}</strong><span class="scorebar"><i style="width:${Math.min(100,d.fit||0)}%"></i></span></div></td><td>${badge(d.final)}</td><td><div class="actions-inline"><button data-open-partner="${p.id}">Edit</button><button data-delete-partner="${p.id}">Delete</button></div></td></tr>`;});
-    const highRisks=(db.partnerRisks||[]).filter(r=>includesSearch(r.partnerId,r.risk,r.level,r.owner)).map(r=>`<tr><td>${esc(r.partnerId)}</td><td>${esc(r.risk)}</td><td class="num">${r.probability}×${r.impact}</td><td>${badge(r.level||riskLevel(r.score))}</td><td>${esc(r.mitigation||'—')}</td><td>${badge(r.status||'—')}</td></tr>`);
+    const rows=db.partners.filter(p=>includesSearch(p.id,profile(p,'Tên Partner / Studio'),profile(p,'Genre chính'),profile(p,'Trạng thái'))).map(p=>{
+      const d=partnerDerived(p),rs=partnerRiskStats(p.id);
+      const riskText=rs.open.length?`${rs.open.length} open${rs.high.length?` · ${rs.high.length} high`:''}`:'No open risk';
+      return `<tr><td><button class="linkish" data-open-partner="${p.id}">${p.id}</button></td><td><b>${esc(profile(p,'Tên Partner / Studio'))}</b><div class="small muted">${esc(profile(p,'Quốc gia')||'')} · ${esc(profile(p,'Quy mô team')||'')}</div></td><td>${esc(profile(p,'Genre chính')||'—')}</td><td>${badge(profile(p,'Trạng thái')||'—')}</td><td>${badge(d.hard)}</td><td class="num">${pct(d.coverage,0)}</td><td>${badge(d.confidence)}</td><td><div class="score-row"><strong>${d.fit??'—'}</strong><span class="scorebar"><i style="width:${Math.min(100,d.fit||0)}%"></i></span></div></td><td>${badge(riskText)}</td><td>${badge(d.final)}</td><td><div class="actions-inline"><button data-open-partner="${p.id}">Edit</button><button data-delete-partner="${p.id}">Delete</button></div></td></tr>`;
+    });
+    const portfolioRisks=(db.partnerRisks||[]).filter(r=>includesSearch(r.partnerId,r.risk,r.level,r.owner)).map(r=>{
+      const p=byId(db.partners,r.partnerId);
+      return `<tr><td><button class="linkish" data-open-partner="${esc(r.partnerId)}">${esc(r.partnerId)}</button><div class="small muted">${esc(profile(p,'Tên Partner / Studio')||'')}</div></td><td>${esc(r.risk)}</td><td class="num">${r.probability}×${r.impact}</td><td>${badge(r.level||riskLevel(r.score))}</td><td>${esc(r.mitigation||'—')}</td><td>${badge(r.status||'—')}</td></tr>`;
+    });
     content.innerHTML=`<div class="grid kpis">${kpi('Total partners',db.partners.length)}${kpi('Hard Gate PASS',db.partners.filter(p=>partnerDerived(p).hard==='ĐẠT').length)}${kpi('Evidence ready',db.partners.filter(p=>partnerDerived(p).minimumGate==='ĐẠT').length)}${kpi('Priority / Pass',db.partners.filter(p=>['Ưu tiên','Đạt'].includes(partnerDerived(p).final)).length)}</div>
-      ${panel('Partner master & decision',table(['ID','Partner','Genre','Status','Hard Gate','Coverage','Confidence','Fit /100','Conclusion',''],rows),'Profile → Hard Gate → Evidence → Scorecard → Decision',`<button class="primary" data-action="add-partner">+ Partner</button>`)}
-      ${panel('Risk register',table(['Partner','Risk','P×I','Level','Mitigation','Status'],highRisks),'Probability × impact = risk priority',`<button class="ghost" data-action="add-risk">+ Risk</button>`)}`;
+      ${panel('Partner master & decision',table(['ID','Partner','Genre','Status','Hard Gate','Coverage','Confidence','Fit /100','Open risks','Conclusion',''],rows),'Profile → Hard Gate → Evidence → Scorecard → Risk → Decision',`<button class="primary" data-action="add-partner">+ Partner</button>`)}
+      ${panel('Portfolio risk overview · All partners',table(['Partner','Risk','P×I','Level','Mitigation','Status'],portfolioRisks),'View tổng hợp toàn portfolio. Để thêm / sửa / xóa risk, mở đúng Partner ở bảng phía trên.')}`;
     bindOpeners();
   }
 
@@ -397,6 +414,79 @@
     };
   }
 
+  function partnerRiskSectionHtml(partnerId,isNew=false){
+    const rs=partnerRiskStats(partnerId);
+    const summary=isNew?'Save Partner trước khi thêm Risk.':`${rs.open.length} risk đang mở · ${rs.high.length} Cao/Nghiêm trọng · ${rs.all.length} tổng cộng.`;
+    return `<div class="section-title-row"><div class="section-title">Risk Register · ${esc(partnerId)}</div><button type="button" class="ghost" data-partner-risk-add ${isNew?'disabled':''}>+ Risk</button></div>
+      <div class="notice partner-risk-helper">${esc(summary)} Risk tại đây chỉ thuộc <b>${esc(partnerId)}</b>. Decision Generator cũng chỉ đọc risk của Partner này.</div>
+      <div data-partner-risk-list></div>
+      <div class="partner-risk-editor" data-partner-risk-editor hidden>
+        <div class="risk-editor-head"><b data-risk-editor-title>Add risk</b><span class="small muted">Partner locked: ${esc(partnerId)}</span></div>
+        <div class="form-grid three-cols">
+          ${fText('risk_id','Risk ID','')}${fText('risk_prob','Probability 1–3','','','number')}${fText('risk_impact','Impact 1–3','','','number')}
+          ${fArea('risk_text','Risk','')}${fArea('risk_mitigation','Mitigation','')}${fText('risk_owner','Owner','')}
+          ${fSelect('risk_status','Status','Đang mở',['Đang mở','Đang xử lý','Chấp nhận','Đã đóng'])}${fText('risk_due','Due date','','','date')}${fArea('risk_notes','Notes','')}
+        </div>
+        <div class="risk-editor-actions"><button type="button" class="ghost" data-risk-editor-cancel>Cancel</button><button type="button" class="primary" data-risk-editor-save>Save Risk</button></div>
+      </div>`;
+  }
+
+  function bindPartnerRiskSection(root,partnerId,isNew=false){
+    const list=root?.querySelector('[data-partner-risk-list]');
+    const editor=root?.querySelector('[data-partner-risk-editor]');
+    const addBtn=root?.querySelector('[data-partner-risk-add]');
+    if(!list||!editor||!addBtn)return;
+    const canEdit=!(window.SAVA_SUPABASE?.configured) || window.SAVA_SUPABASE.canEdit();
+    const canDelete=!(window.SAVA_SUPABASE?.configured) || window.SAVA_SUPABASE.canDelete();
+    if(isNew||!canEdit)addBtn.disabled=true;
+    const field=n=>editor.querySelector(`[name="${n}"]`);
+    if(field('risk_id'))field('risk_id').readOnly=true;
+
+    const refresh=()=>{
+      const risks=partnerRiskStats(partnerId).all.slice().sort((a,b)=>{
+        const ac=a.status==='Đã đóng'?1:0,bc=b.status==='Đã đóng'?1:0;
+        return ac-bc || (num(b.score)||0)-(num(a.score)||0) || String(a.id).localeCompare(String(b.id));
+      });
+      const rows=risks.map(r=>`<tr><td><b>${esc(r.id)}</b></td><td>${esc(r.risk||'—')}</td><td class="num">${r.probability??'—'}×${r.impact??'—'}</td><td>${badge(r.level||riskLevel(r.score))}</td><td>${esc(r.mitigation||'—')}</td><td>${badge(r.status||'—')}</td><td>${esc(r.owner||'—')}</td><td>${esc(r.dueDate||'—')}</td><td><div class="actions-inline"><button type="button" data-risk-inline-edit="${esc(r.id)}" ${canEdit?'':'disabled'}>Edit</button><button type="button" data-risk-inline-delete="${esc(r.id)}" ${canDelete?'':'disabled'}>Delete</button></div></td></tr>`);
+      list.innerHTML=table(['ID','Risk','P×I','Level','Mitigation','Status','Owner','Due',''],rows);
+      list.querySelectorAll('[data-risk-inline-edit]').forEach(btn=>btn.onclick=()=>showEditor(byId(db.partnerRisks,btn.dataset.riskInlineEdit)));
+      list.querySelectorAll('[data-risk-inline-delete]').forEach(btn=>btn.onclick=()=>{
+        if(!canDelete){toast('Only Admin can delete risks');return;}
+        const risk=byId(db.partnerRisks,btn.dataset.riskInlineDelete);if(!risk)return;
+        if(confirm(`Delete ${risk.id} from ${partnerId}?`)){
+          db.partnerRisks=(db.partnerRisks||[]).filter(x=>x.id!==risk.id);
+          persist(`Deleted risk ${risk.id} from ${partnerId}`);refresh();
+        }
+      });
+      const rs=partnerRiskStats(partnerId);
+      const helper=root.querySelector('.partner-risk-helper');
+      if(helper&&!isNew)helper.innerHTML=`<b>${rs.open.length}</b> risk đang mở · <b>${rs.high.length}</b> Cao/Nghiêm trọng · <b>${rs.all.length}</b> tổng cộng. Risk tại đây chỉ thuộc <b>${esc(partnerId)}</b>. Decision Generator cũng chỉ đọc risk của Partner này.`;
+    };
+
+    const showEditor=(risk=null)=>{
+      if(isNew||!canEdit)return;
+      const r=risk||{id:nextRiskId(),risk:'',probability:2,impact:2,mitigation:'',owner:'',status:'Đang mở',dueDate:'',notes:''};
+      editor.hidden=false;editor.dataset.editingId=risk?.id||'';
+      const title=editor.querySelector('[data-risk-editor-title]');if(title)title.textContent=risk?`Edit ${r.id}`:`Add risk · ${partnerId}`;
+      field('risk_id').value=r.id||'';field('risk_text').value=r.risk||'';field('risk_prob').value=r.probability??2;field('risk_impact').value=r.impact??2;field('risk_mitigation').value=r.mitigation||'';field('risk_owner').value=r.owner||'';field('risk_status').value=r.status||'Đang mở';field('risk_due').value=r.dueDate||'';field('risk_notes').value=r.notes||'';
+      editor.scrollIntoView({behavior:'smooth',block:'nearest'});
+    };
+    addBtn.onclick=()=>showEditor();
+    editor.querySelector('[data-risk-editor-cancel]').onclick=()=>{editor.hidden=true;editor.dataset.editingId='';};
+    editor.querySelector('[data-risk-editor-save]').onclick=()=>{
+      if(!canEdit)return;
+      const probability=Number(field('risk_prob').value),impact=Number(field('risk_impact').value),riskText=field('risk_text').value.trim();
+      if(!riskText){toast('Risk description is required');return;}
+      if(![1,2,3].includes(probability)||![1,2,3].includes(impact)){toast('Probability and Impact must be 1, 2 or 3');return;}
+      const editingId=editor.dataset.editingId;
+      let r=editingId?byId(db.partnerRisks,editingId):null;
+      if(!r){r={id:field('risk_id').value||nextRiskId(),partnerId};(db.partnerRisks=db.partnerRisks||[]).push(r);}
+      r.partnerId=partnerId;r.risk=riskText;r.probability=probability;r.impact=impact;r.score=probability*impact;r.level=riskLevel(r.score);r.mitigation=field('risk_mitigation').value.trim();r.owner=field('risk_owner').value.trim();r.status=field('risk_status').value;r.dueDate=field('risk_due').value;r.notes=field('risk_notes').value.trim();
+      editor.hidden=true;editor.dataset.editingId='';persist(`${editingId?'Updated':'Added'} risk ${r.id} · ${partnerId}`);refresh();
+    };
+    refresh();
+  }
+
   function openPartner(id){
     let p=byId(db.partners,id); const isNew=!p;
     if(!p) p={id:`P${String(db.partners.length+1).padStart(3,'0')}`,profile:{},hardGate:{},evidence:{},scores:{},scorecard:{},decision:{}};
@@ -409,6 +499,7 @@
       <div class="section-title">Hard Gate</div><div class="form-grid three-cols">${[['legalContract','Pháp lý / Hợp đồng'],['ipSourceRights','IP / source code rights'],['publisherConflict','Publisher conflict'],['dataTransparency','Data transparency'],['teamContinuity','Team continuity'],['compliance','Compliance']].map(([k,l])=>fSelect(`gate_${k}`,l,p.hardGate?.[k]||'Chờ xác minh',GATE_STATUS)).join('')}${fArea('gateEvidence','Gate evidence / notes',p.hardGate?.evidence||'')}${fText('gateOwner','Gate owner',p.hardGate?.owner||'')}${fText('gateDue','Gate due date',p.hardGate?.dueDate||'','','date')}</div>
       <div class="section-title">Evidence & status</div><div class="form-grid">${evidenceFields.map(([k,l])=>`${fArea(`ev_${k}_text`,l,p.evidence?.[k]?.text||'')}${fSelect(`ev_${k}_status`,`${l} · status`,p.evidence?.[k]?.status||'',EVIDENCE_STATUS)}`).join('')}${fText('evSource','Source / updated',p.evidence?.sourceUpdated||'','full')}${fArea('evFollow','Follow-up / owner',p.evidence?.followUp||'')}</div>
       <div class="section-title">Score input 1–5</div><div class="form-grid three-cols">${scoreFields.map(([k,l])=>fText(`score_${k}`,l,p.scores?.[k]??'','','number')).join('')}</div>
+      ${partnerRiskSectionHtml(p.id,isNew)}
       <div class="section-title-row"><div class="section-title">Decision</div><button type="button" class="ghost decision-generate" data-generate-partner-decision>✨ Generate Decision</button></div><div class="notice decision-helper">Generate từ <b>Hard Gate + Minimum Evidence + Partner Fit + Risk Register</b> theo dữ liệu hiện tại trong form. Kết quả vẫn có thể sửa tay trước khi Save.</div><div class="form-grid decision-grid">${fText('decisionReco','Final recommendation',p.decision?.recommendation||'')}${fText('decisionStatus','Decision status',p.decision?.status||'')}${fArea('strengths','Strengths',p.decision?.strengths||'')}${fArea('risks','Risks',p.decision?.risks||'')}${fArea('conditions','Conditions before next stage',p.decision?.conditions||'')}${fArea('nextAction','Next action',p.decision?.nextAction||'')}${fText('decisionOwner','Decision owner',p.decision?.owner||'')}${fText('decisionDate','Decision date',p.decision?.decisionDate?.slice?.(0,10)||p.decision?.decisionDate||'','','date')}${fArea('decisionNotes','Decision notes',p.decision?.notes||'')}</div>`;
     modal(isNew?'Add partner':`${p.id} · ${profile(p,'Tên Partner / Studio')||'Partner'}`,body,(root)=>{
       const oldId=p.id; p.id=formVal(root,'id')||oldId;
@@ -424,6 +515,7 @@
       modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} partner ${p.id}`);
     },{wide:true});
     const partnerModal=modalRoot.querySelector('.modal');
+    bindPartnerRiskSection(partnerModal,p.id,isNew);
     const genBtn=partnerModal?.querySelector('[data-generate-partner-decision]');
     if(genBtn&&window.SAVA_SUPABASE?.configured&&!window.SAVA_SUPABASE.canEdit())genBtn.disabled=true;
     if(genBtn&&!genBtn.disabled)genBtn.onclick=()=>{
@@ -440,7 +532,7 @@
 
   function openRisk(id){ const r=byId(db.partnerRisks,id); }
   function addRisk(){
-    const r={id:`RISK-${String((db.partnerRisks||[]).length+1).padStart(3,'0')}`,partnerId:db.partners[0]?.id||'',risk:'',probability:2,impact:2,mitigation:'',owner:'',status:'Đang mở',dueDate:'',notes:''};
+    const r={id:nextRiskId(),partnerId:db.partners[0]?.id||'',risk:'',probability:2,impact:2,mitigation:'',owner:'',status:'Đang mở',dueDate:'',notes:''};
     const body=`<div class="form-grid">${fText('id','Risk ID',r.id)}${fSelect('partnerId','Partner',r.partnerId,db.partners.map(p=>p.id))}${fArea('risk','Risk',r.risk)}${fText('prob','Probability 1-3',r.probability,'','number')}${fText('impact','Impact 1-3',r.impact,'','number')}${fArea('mitigation','Mitigation',r.mitigation)}${fText('owner','Owner',r.owner)}${fSelect('status','Status',r.status,['Đang mở','Đang xử lý','Chấp nhận','Đã đóng'])}${fText('due','Due date',r.dueDate,'','date')}${fArea('notes','Notes',r.notes)}</div>`;
     modal('Add partner risk',body,(root)=>{r.id=formVal(root,'id');r.partnerId=formVal(root,'partnerId');r.risk=formVal(root,'risk');r.probability=formNum(root,'prob');r.impact=formNum(root,'impact');r.score=(r.probability||0)*(r.impact||0);r.level=riskLevel(r.score);r.mitigation=formVal(root,'mitigation');r.owner=formVal(root,'owner');r.status=formVal(root,'status');r.dueDate=formVal(root,'due');r.notes=formVal(root,'notes');db.partnerRisks.push(r);modalRoot.innerHTML='';persist(`Added risk ${r.id}`);});
   }

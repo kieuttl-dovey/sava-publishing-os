@@ -1,6 +1,18 @@
-# SAVA Publishing OS v0.8 — Deal Making + BD Guidance
+# SAVA Publishing OS v0.9 — Market Intelligence Executive View
 
 Internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
+
+## v0.9 changes — Market Intelligence for decision making
+
+- Rebuilt Market Intelligence from a raw benchmark table into an **executive market view**.
+- Added KPI cards for priority markets, strong 3M growth, standout monetization and favorable UA.
+- Added a derived **Sức hấp dẫn thị trường /100** using available source metrics: Quy mô 30% · Tăng trưởng 25% · Monetization 20% · UA 15% · Phù hợp SAVA 10%. Missing metrics are excluded and weights are re-normalized rather than treated as zero.
+- Added **Top market attractiveness** horizontal chart and **Growth × Monetization** opportunity scatter chart; bubble size reflects relative market scale.
+- Added a compact decision table: Market/Mechanic · Sức hấp dẫn /100 · Quy mô · Tăng trưởng · Monetization · CPI · Phù hợp SAVA /100 · Định hướng.
+- Added **SAVA Opportunity Map** with four groups: Ưu tiên ngay · Cơ hội mới · Theo dõi · Giảm ưu tiên.
+- Raw Market Economics + UA Benchmark data remain available in a collapsed detail section for audit/drill-down.
+- Market edit now lets the team enter **Phù hợp SAVA /100** and an internal direction note. These fields live in the existing market record JSON, so no SQL migration is required.
+- Publisher Landscape remains separate from source market economics; no missing publisher facts are invented.
 
 ## v0.8 changes — RS policy + hướng dẫn BD
 

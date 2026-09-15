@@ -495,13 +495,107 @@
     bindOpeners();
   }
 
+  function marketClamp100(v){const n=num(v);return n===null?null:Math.max(0,Math.min(100,n));}
+  function marketPositive(v){const n=num(v);return n!==null&&n>0?n:null;}
+  function marketPctRank(value,values,{inverse=false}={}){
+    const n=num(value),xs=(values||[]).map(num).filter(x=>x!==null).sort((a,b)=>a-b);if(n===null||!xs.length)return null;
+    const below=xs.filter(x=>x<n).length,equal=xs.filter(x=>x===n).length;
+    let rank=xs.length===1?50:((below+Math.max(0,equal-1)/2)/(xs.length-1))*100;
+    rank=Math.max(0,Math.min(100,rank));return inverse?100-rank:rank;
+  }
+  function marketAvg(...vals){const xs=vals.flat().map(num).filter(x=>x!==null);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;}
+  function marketMoneyCompact(v){const n=marketPositive(v);if(n===null)return '—';if(n>=1e9)return `$${fmt(n/1e9,1)}B`;if(n>=1e6)return `$${fmt(n/1e6,1)}M`;if(n>=1e3)return `$${fmt(n/1e3,0)}K`;return money(n);}
+  function marketNumCompact(v){const n=marketPositive(v);if(n===null)return '—';if(n>=1e9)return `${fmt(n/1e9,1)}B`;if(n>=1e6)return `${fmt(n/1e6,1)}M`;if(n>=1e3)return `${fmt(n/1e3,0)}K`;return fmt(n,0);}
+  function marketTrendLabel(m){
+    const dl=marketPositive(m.Downloads_30d),rev=marketPositive(m.Revenue_30d_USD);
+    const xs=[];if(dl!==null&&num(m.DL_Growth_3m)!==null)xs.push(num(m.DL_Growth_3m));if(rev!==null&&num(m.Rev_Growth_3m)!==null)xs.push(num(m.Rev_Growth_3m));
+    if(!xs.length)return {key:'na',label:'Chưa đủ dữ liệu',raw:null};const g=xs.reduce((a,b)=>a+b,0)/xs.length;
+    if(g>=.5)return {key:'strong-up',label:'Tăng mạnh',raw:g};if(g>=.1)return {key:'up',label:'Tăng',raw:g};if(g>-.1)return {key:'flat',label:'Ổn định',raw:g};if(g>-.3)return {key:'down',label:'Giảm',raw:g};return {key:'strong-down',label:'Giảm mạnh',raw:g};
+  }
+  function marketBandLabel(score,kind='generic'){
+    const n=num(score);if(n===null)return 'Chưa đủ dữ liệu';
+    if(kind==='scale')return n>=80?'Rất lớn':n>=60?'Lớn':n>=40?'Trung bình':'Nhỏ';
+    if(kind==='mon')return n>=80?'Rất tốt':n>=60?'Tốt':n>=40?'Trung bình':'Thấp';
+    if(kind==='ua')return n>=80?'Rất thuận lợi':n>=60?'Thuận lợi':n>=40?'Trung bình':'Khó';
+    return n>=80?'Rất tốt':n>=65?'Tốt':n>=50?'Trung bình':'Thấp';
+  }
+  function marketDirection(x){
+    if(x.completeness<.34)return {key:'data',label:'Bổ sung dữ liệu'};
+    if(x.score!==null&&x.score>=80)return {key:'priority',label:'Ưu tiên sourcing'};
+    if(x.score!==null&&x.score>=70)return {key:'test',label:'Ưu tiên test'};
+    if(x.score!==null&&x.score>=55)return {key:'watch',label:'Theo dõi'};
+    return {key:'low',label:'Không ưu tiên'};
+  }
+  function marketAnalytics(mechanics){
+    const list=(mechanics||[]);
+    const dlVals=list.map(m=>marketPositive(m.Downloads_30d)).filter(x=>x!==null),revVals=list.map(m=>marketPositive(m.Revenue_30d_USD)).filter(x=>x!==null);
+    const dlgVals=list.filter(m=>marketPositive(m.Downloads_30d)!==null).map(m=>num(m.DL_Growth_3m)).filter(x=>x!==null),revgVals=list.filter(m=>marketPositive(m.Revenue_30d_USD)!==null).map(m=>num(m.Rev_Growth_3m)).filter(x=>x!==null);
+    const rpdVals=list.map(m=>marketPositive(m.Revenue_per_Download_SAME_COHORT)).filter(x=>x!==null),cpiVals=list.map(m=>marketPositive(m.UA_Benchmark?.CPI_Median)).filter(x=>x!==null);
+    return list.map(m=>{
+      const dl=marketPositive(m.Downloads_30d),rev=marketPositive(m.Revenue_30d_USD),dlg=dl!==null?num(m.DL_Growth_3m):null,revg=rev!==null?num(m.Rev_Growth_3m):null,rpd=marketPositive(m.Revenue_per_Download_SAME_COHORT),cpi=marketPositive(m.UA_Benchmark?.CPI_Median);
+      const scale=marketAvg(marketPctRank(dl,dlVals),marketPctRank(rev,revVals));
+      const growth=marketAvg(marketPctRank(dlg,dlgVals),marketPctRank(revg,revgVals));
+      const monetization=marketPctRank(rpd,rpdVals);
+      const ua=marketPctRank(cpi,cpiVals,{inverse:true});
+      const savaFit=marketClamp100(m.SAVA_Fit_100??m.savaFit100??m.savaFit);
+      const parts=[['scale',scale,30],['growth',growth,25],['monetization',monetization,20],['ua',ua,15],['savaFit',savaFit,10]].filter(([,v])=>v!==null);
+      const observed=[dl,rev,dlg,revg,rpd,cpi].filter(x=>x!==null).length,completeness=observed/6,trend=marketTrendLabel(m);
+      const weight=parts.reduce((a,x)=>a+x[2],0);const score=weight&&observed>=2?Math.round(parts.reduce((a,x)=>a+x[1]*x[2],0)/weight*10)/10:null;
+      const out={m,dl,rev,dlg,revg,rpd,cpi,scale,growth,monetization,ua,savaFit,score,completeness,trend};out.direction=marketDirection(out);return out;
+    });
+  }
+  function marketScoreBar(value){const n=num(value),w=n===null?0:Math.max(0,Math.min(100,n));const cls=n===null?'na':n>=80?'priority':n>=70?'pass':n>=55?'conditional':'review';return `<div class="market-score ${cls}" title="${n===null?'Chưa đủ dữ liệu':`${fmt(n,1)}/100`}"><strong>${n===null?'—':fmt(n,1)}</strong><span><i style="width:${w}%"></i></span></div>`;}
+  function marketDirectionBadge(x){return `<span class="market-direction ${x.direction.key}">${esc(x.direction.label)}</span>`;}
+  function marketTopBars(items){
+    const top=[...items].filter(x=>x.score!==null&&x.completeness>=.34).sort((a,b)=>b.score-a.score).slice(0,8);if(!top.length)return '<div class="empty">Chưa đủ dữ liệu để xếp hạng.</div>';
+    return `<div class="market-bars">${top.map((x,i)=>`<button class="market-bar-row" data-open-market="${esc(x.m.Mechanic_ID)}"><span class="market-rank">${i+1}</span><span class="market-bar-name">${esc(x.m.Mechanic)}</span><span class="market-bar-track"><i style="width:${Math.max(0,Math.min(100,x.score))}%"></i></span><b>${fmt(x.score,1)}</b></button>`).join('')}</div>`;
+  }
+  function marketScatter(items){
+    const pts=items.filter(x=>x.growth!==null&&x.monetization!==null).sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,18);if(!pts.length)return '<div class="empty">Chưa đủ dữ liệu Growth + Monetization để vẽ biểu đồ.</div>';
+    const W=640,H=300,L=54,R=18,T=22,B=42,iw=W-L-R,ih=H-T-B;const sx=v=>L+(Math.max(0,Math.min(100,v))/100)*iw,sy=v=>T+ih-(Math.max(0,Math.min(100,v))/100)*ih;
+    const grid=[0,25,50,75,100].map(v=>`<line x1="${sx(v)}" y1="${T}" x2="${sx(v)}" y2="${T+ih}" class="market-grid-line"/><text x="${sx(v)}" y="${H-18}" class="market-axis-text" text-anchor="middle">${v}</text><line x1="${L}" y1="${sy(v)}" x2="${L+iw}" y2="${sy(v)}" class="market-grid-line"/><text x="${L-10}" y="${sy(v)+3}" class="market-axis-text" text-anchor="end">${v}</text>`).join('');
+    const dots=pts.map((x,i)=>{const r=5+((x.scale??50)/100)*7;const key=x.direction.key;const show=i<9;const label=String(x.m.Mechanic||'').replace(/\s*\/.*$/,'').slice(0,18);return `<g class="market-dot ${key}"><circle cx="${sx(x.growth)}" cy="${sy(x.monetization)}" r="${r}"><title>${esc(x.m.Mechanic)} · Growth ${fmt(x.growth,0)}/100 · Monetization ${fmt(x.monetization,0)}/100 · Score ${x.score===null?'—':fmt(x.score,1)}/100</title></circle>${show?`<text x="${sx(x.growth)+r+4}" y="${sy(x.monetization)+3}" class="market-dot-label">${esc(label)}</text>`:''}</g>`}).join('');
+    return `<div class="market-scatter-wrap"><svg class="market-scatter" viewBox="0 0 ${W} ${H}" role="img" aria-label="Biểu đồ Tăng trưởng và Monetization">${grid}<line x1="${sx(50)}" y1="${T}" x2="${sx(50)}" y2="${T+ih}" class="market-mid-line"/><line x1="${L}" y1="${sy(50)}" x2="${L+iw}" y2="${sy(50)}" class="market-mid-line"/>${dots}<text x="${L+iw/2}" y="${H-2}" class="market-axis-title" text-anchor="middle">Tăng trưởng /100 →</text><text x="15" y="${T+ih/2}" class="market-axis-title" text-anchor="middle" transform="rotate(-90 15 ${T+ih/2})">Monetization /100 →</text></svg></div>`;
+  }
+  function marketOpportunityMap(items){
+    const sorted=[...items].sort((a,b)=>(b.score??-1)-(a.score??-1));
+    const priority=sorted.filter(x=>x.score!==null&&x.score>=75&&x.completeness>=.5);
+    const priorityIds=new Set(priority.map(x=>x.m.Mechanic_ID));
+    const fresh=sorted.filter(x=>!priorityIds.has(x.m.Mechanic_ID)&&x.growth!==null&&x.growth>=70&&x.scale!==null&&x.scale<65&&x.score!==null&&x.score>=55);
+    const freshIds=new Set(fresh.map(x=>x.m.Mechanic_ID));
+    const watch=sorted.filter(x=>!priorityIds.has(x.m.Mechanic_ID)&&!freshIds.has(x.m.Mechanic_ID)&&((x.score!==null&&x.score>=55)||x.completeness<.5));
+    const watchIds=new Set(watch.map(x=>x.m.Mechanic_ID));
+    const low=sorted.filter(x=>!priorityIds.has(x.m.Mechanic_ID)&&!freshIds.has(x.m.Mechanic_ID)&&!watchIds.has(x.m.Mechanic_ID)&&x.score!==null&&x.score<55&&x.completeness>=.5);
+    const groups=[
+      ['Ưu tiên ngay','priority',priority.slice(0,4)],
+      ['Cơ hội mới','new',fresh.slice(0,4)],
+      ['Theo dõi','watch',watch.slice(0,4)],
+      ['Giảm ưu tiên','low',low.slice(0,4)]
+    ];
+    return `<div class="market-opportunity-map">${groups.map(([title,key,xs])=>`<div class="market-opp-card ${key}"><div class="market-opp-head"><b>${title}</b><span>${xs.length}</span></div>${xs.length?xs.map(x=>`<button data-open-market="${esc(x.m.Mechanic_ID)}"><strong>${esc(x.m.Mechanic)}</strong><small>${x.score===null?'—':fmt(x.score,1)}/100 · ${esc(x.trend.label)}</small></button>`).join(''):'<div class="market-opp-empty">Chưa có mechanic phù hợp</div>'}</div>`).join('')}</div>`;
+  }
+
   function renderMarket(){
-    setHeader('Market Intelligence','3 · Market direction + Publisher Landscape');
+    setHeader('Market Intelligence','3 · Định hướng thị trường + Publisher Landscape');
     const mechanics=(db.market||[]).filter(m=>includesSearch(m.Mechanic_ID,m.Mechanic,m.Geography,m.Platform));
-    const rows=mechanics.map(m=>`<tr><td>${esc(m.Mechanic_ID)}</td><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button></td><td>${esc(m.Geography||'—')}</td><td>${fmt(m.Downloads_30d,0)}</td><td>${money(m.Revenue_30d_USD)}</td><td>${m.DL_Growth_3m!==null&&m.DL_Growth_3m!==undefined?pct(m.DL_Growth_3m,1):'—'}</td><td>${m.Rev_Growth_3m!==null&&m.Rev_Growth_3m!==undefined?pct(m.Rev_Growth_3m,1):'—'}</td><td>${m.Revenue_per_Download_SAME_COHORT!==null&&m.Revenue_per_Download_SAME_COHORT!==undefined?'$'+fmt(m.Revenue_per_Download_SAME_COHORT,2):'—'}</td><td>${m.UA_Benchmark?.CPI_Median!==null&&m.UA_Benchmark?.CPI_Median!==undefined?'$'+fmt(m.UA_Benchmark.CPI_Median,2):'—'}</td></tr>`);
+    const insights=marketAnalytics(mechanics),ranked=[...insights].sort((a,b)=>(b.score??-1)-(a.score??-1));
+    const priority=insights.filter(x=>x.score!==null&&x.score>=70&&x.completeness>=.34).length;
+    const strongGrowth=insights.filter(x=>x.trend.key==='strong-up').length;
+    const strongMon=insights.filter(x=>x.monetization!==null&&x.monetization>=75).length;
+    const uaReady=insights.filter(x=>x.ua!==null&&x.ua>=65).length;
+    const execRows=ranked.map(x=>{const m=x.m;const scaleLabel=marketBandLabel(x.scale,'scale'),monLabel=marketBandLabel(x.monetization,'mon'),uaLabel=marketBandLabel(x.ua,'ua');const scaleDetail=`DL ${marketNumCompact(x.dl)} · Rev ${marketMoneyCompact(x.rev)}`;const growthDetail=[x.dlg!==null?`DL ${pct(x.dlg,1)}`:null,x.revg!==null?`Rev ${pct(x.revg,1)}`:null].filter(Boolean).join(' · ')||'—';return `<tr><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button><div class="small muted">${esc(m.Geography||'—')} · ${esc(m.Platform||'—')}</div></td><td>${marketScoreBar(x.score)}</td><td><b>${esc(scaleLabel)}</b><div class="small muted">${esc(scaleDetail)}</div></td><td><span class="market-trend ${x.trend.key}">${esc(x.trend.label)}</span><div class="small muted">${esc(growthDetail)}</div></td><td><b>${esc(monLabel)}</b><div class="small muted">RPD ${x.rpd===null?'—':'$'+fmt(x.rpd,2)}</div></td><td><b>${x.cpi===null?'—':'$'+fmt(x.cpi,2)}</b><div class="small muted">${esc(uaLabel)}</div></td><td>${x.savaFit===null?'<span class="muted">Chưa nhập</span>':marketScoreBar(x.savaFit)}</td><td>${marketDirectionBadge(x)}</td></tr>`;});
+    const rawRows=mechanics.map(m=>`<tr><td>${esc(m.Mechanic_ID)}</td><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button></td><td>${esc(m.Geography||'—')}</td><td>${fmt(m.Downloads_30d,0)}</td><td>${money(m.Revenue_30d_USD)}</td><td>${m.DL_Growth_3m!==null&&m.DL_Growth_3m!==undefined?pct(m.DL_Growth_3m,1):'—'}</td><td>${m.Rev_Growth_3m!==null&&m.Rev_Growth_3m!==undefined?pct(m.Rev_Growth_3m,1):'—'}</td><td>${m.Revenue_per_Download_SAME_COHORT!==null&&m.Revenue_per_Download_SAME_COHORT!==undefined?'$'+fmt(m.Revenue_per_Download_SAME_COHORT,2):'—'}</td><td>${m.UA_Benchmark?.CPI_Median!==null&&m.UA_Benchmark?.CPI_Median!==undefined?'$'+fmt(m.UA_Benchmark.CPI_Median,2):'—'}</td></tr>`);
     const pubs=(db.publisherLandscape||[]).filter(x=>includesSearch(x.name,x.genres,x.testApproach,x.dealApproach)).map(x=>`<tr><td><button class="linkish" data-open-publisher="${x.id}">${esc(x.name)}</button></td><td>${esc(x.genres||'—')}</td><td>${esc(x.lookingFor||'—')}</td><td>${esc(x.testApproach||'—')}</td><td>${esc(x.investmentApproach||'—')}</td><td>${esc(x.dealApproach||'—')}</td><td>${esc(x.operationModel||'—')}</td></tr>`);
-    content.innerHTML=`${panel('Mechanic / market economics',table(['ID','Mechanic','Geo','DL 30d','Revenue 30d','DL growth 3m','Rev growth 3m','RPD','CPI median'],rows),'Seeded from the Market Economics + UA Benchmark sheets. Historical totals may be coverage-limited exactly as noted in the source workbook.')}
-      ${panel('Publisher Landscape',pubs.length?table(['Publisher','Focus genres','Looking for','How they test','Investment','Deal','Operation'],pubs):'<div class="empty"><b>No dedicated publisher landscape data existed in the 3 supplied files.</b><br/>The module is ready for the team to build benchmark records without mixing assumptions into source-derived data.</div>','Benchmark who is looking for what, how they test, invest, deal and operate.',`<button class="primary" data-action="add-publisher">+ Publisher benchmark</button>`)}`;
+    const top=ranked.find(x=>x.score!==null),topGrowth=[...insights].filter(x=>x.trend.raw!==null).sort((a,b)=>(b.trend.raw??-99)-(a.trend.raw??-99))[0];
+    const executiveNote=`<div class="market-exec-note"><b>Đọc nhanh cho quyết định:</b> ${top?`Cơ hội tổng hợp cao nhất hiện tại là <strong>${esc(top.m.Mechanic)}</strong> (${fmt(top.score,1)}/100).`: 'Chưa đủ dữ liệu để xếp hạng.'} ${topGrowth?`Tăng trưởng 3M nổi bật: <strong>${esc(topGrowth.m.Mechanic)}</strong> (${topGrowth.trend.raw===null?'—':pct(topGrowth.trend.raw,1)}).`:''}<span>Điểm Sức hấp dẫn là chỉ số tự tính từ dữ liệu hiện có; nếu BD nhập thêm <b>Phù hợp SAVA /100</b> trong chi tiết mechanic, hệ thống sẽ đưa yếu tố này vào điểm tổng.</span></div>`;
+    const formula=`<div class="market-formula"><span><b>30%</b> Quy mô</span><span><b>25%</b> Tăng trưởng</span><span><b>20%</b> Monetization</span><span><b>15%</b> UA</span><span><b>10%</b> Phù hợp SAVA</span><small>Metric thiếu sẽ được bỏ khỏi phép tính và phân bổ lại trọng số; số 0/blank ở volume/CPI/RPD được coi là chưa có dữ liệu.</small></div>`;
+    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('Thị trường nên ưu tiên',priority,'Sức hấp dẫn ≥ 70/100')}${kpi('Tăng trưởng mạnh',strongGrowth,'Tăng trưởng 3M bình quân ≥ 50%')}${kpi('Monetization nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
+      ${executiveNote}
+      <div class="market-chart-grid"><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">XẾP HẠNG</span><h3>Top Sức hấp dẫn thị trường /100</h3></div></div>${marketTopBars(insights)}</section><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">BẢN ĐỒ CƠ HỘI</span><h3>Tăng trưởng × Monetization</h3></div><small>Kích thước điểm ≈ quy mô tương đối</small></div>${marketScatter(insights)}</section></div>
+      ${panel('Định hướng thị trường',formula+table(['Thị trường / Mechanic','Sức hấp dẫn /100','Quy mô','Tăng trưởng','Monetization','CPI','Phù hợp SAVA /100','Định hướng'],execRows,'market-exec-table'),'Bảng dành cho quyết định: click mechanic để xem / cập nhật dữ liệu chi tiết và nhập mức phù hợp với SAVA.')}
+      ${panel('SAVA Opportunity Map',marketOpportunityMap(insights),'Phân nhóm tự động từ dữ liệu hiện có; dùng để xác định nơi nên sourcing, test, theo dõi hoặc giảm ưu tiên.')}
+      ${panel('Publisher Landscape',pubs.length?table(['Publisher','Thể loại trọng tâm','Đang tìm gì','Cách test','Cách đầu tư','Cách deal','Cách vận hành'],pubs):'<div class="empty"><b>Chưa có dữ liệu Publisher Landscape riêng trong các file nguồn hiện tại.</b><br/>Team có thể bổ sung benchmark tại đây mà không trộn giả định vào dữ liệu thị trường gốc.</div>','Theo dõi publisher đang tìm game gì, cách họ test, đầu tư, deal và vận hành.',`<button class="primary" data-action="add-publisher">+ Publisher benchmark</button>`)}
+      ${panel('Dữ liệu chi tiết',`<details class="market-raw-details"><summary>Xem bảng Market Economics + UA Benchmark (${mechanics.length} mechanics)</summary>${table(['ID','Mechanic','Geo','DL 30D','Revenue 30D','DL Growth 3M','Rev Growth 3M','RPD','CPI Median'],rawRows,'market-raw-table')}</details>`,'Dữ liệu gốc từ Market Economics + UA Benchmark; các tổng lịch sử có thể bị giới hạn coverage đúng như ghi chú trong workbook nguồn.')}`;
     bindOpeners();
   }
 
@@ -829,8 +923,8 @@
 
   function openMarket(id){
     const m=(db.market||[]).find(x=>x.Mechanic_ID===id);if(!m)return;
-    const body=`<div class="form-grid three-cols">${fText('name','Mechanic',m.Mechanic)}${fText('geo','Geography',m.Geography)}${fText('platform','Platform',m.Platform)}${fText('dl30','Downloads 30d',m.Downloads_30d??'','','number')}${fText('dl90','Downloads 90d',m.Downloads_90d??'','','number')}${fText('dl12','Downloads 12m',m.Downloads_12m??'','','number')}${fText('rev30','Revenue 30d USD',m.Revenue_30d_USD??'','','number')}${fText('rev90','Revenue 90d USD',m.Revenue_90d_USD??'','','number')}${fText('rev12','Revenue 12m USD',m.Revenue_12m_USD??'','','number')}${fText('dlg3','DL growth 3m (decimal)',m.DL_Growth_3m??'','','number')}${fText('revg3','Revenue growth 3m (decimal)',m.Rev_Growth_3m??'','','number')}${fText('rpd','Revenue/download',m.Revenue_per_Download_SAME_COHORT??'','','number')}${fText('cpi','CPI median',m.UA_Benchmark?.CPI_Median??'','','number')}</div>`;
-    modal(`${id} · ${m.Mechanic}`,body,(root)=>{m.Mechanic=formVal(root,'name');m.Geography=formVal(root,'geo');m.Platform=formVal(root,'platform');m.Downloads_30d=formNum(root,'dl30');m.Downloads_90d=formNum(root,'dl90');m.Downloads_12m=formNum(root,'dl12');m.Revenue_30d_USD=formNum(root,'rev30');m.Revenue_90d_USD=formNum(root,'rev90');m.Revenue_12m_USD=formNum(root,'rev12');m.DL_Growth_3m=formNum(root,'dlg3');m.Rev_Growth_3m=formNum(root,'revg3');m.Revenue_per_Download_SAME_COHORT=formNum(root,'rpd');m.UA_Benchmark=m.UA_Benchmark||{};m.UA_Benchmark.CPI_Median=formNum(root,'cpi');modalRoot.innerHTML='';persist(`Updated market mechanic ${id}`);});
+    const body=`<div class="notice"><b>Hướng dẫn:</b> các chỉ số Market/UA bên dưới là dữ liệu benchmark. <b>Phù hợp SAVA /100</b> là đánh giá nội bộ của team (0–100), dùng để bổ sung góc nhìn chiến lược vào Sức hấp dẫn thị trường. Nếu để trống, hệ thống tự phân bổ lại trọng số theo các metric còn lại.</div><div class="section-title">Dữ liệu thị trường</div><div class="form-grid three-cols">${fText('name','Mechanic',m.Mechanic)}${fText('geo','Geography',m.Geography)}${fText('platform','Platform',m.Platform)}${fText('dl30','Downloads 30d',m.Downloads_30d??'','','number')}${fText('dl90','Downloads 90d',m.Downloads_90d??'','','number')}${fText('dl12','Downloads 12m',m.Downloads_12m??'','','number')}${fText('rev30','Revenue 30d USD',m.Revenue_30d_USD??'','','number')}${fText('rev90','Revenue 90d USD',m.Revenue_90d_USD??'','','number')}${fText('rev12','Revenue 12m USD',m.Revenue_12m_USD??'','','number')}${fText('dlg3','DL growth 3m (decimal)',m.DL_Growth_3m??'','','number')}${fText('revg3','Revenue growth 3m (decimal)',m.Rev_Growth_3m??'','','number')}${fText('rpd','Revenue/download',m.Revenue_per_Download_SAME_COHORT??'','','number')}${fText('cpi','CPI median',m.UA_Benchmark?.CPI_Median??'','','number')}</div><div class="section-title">Định hướng SAVA</div><div class="form-grid">${fText('savaFit','Phù hợp SAVA /100',m.SAVA_Fit_100??'','','number')}${fArea('savaNote','Ghi chú định hướng / lý do',m.SAVA_Direction_Note||'')}</div>`;
+    modal(`${id} · ${m.Mechanic}`,body,(root)=>{m.Mechanic=formVal(root,'name');m.Geography=formVal(root,'geo');m.Platform=formVal(root,'platform');m.Downloads_30d=formNum(root,'dl30');m.Downloads_90d=formNum(root,'dl90');m.Downloads_12m=formNum(root,'dl12');m.Revenue_30d_USD=formNum(root,'rev30');m.Revenue_90d_USD=formNum(root,'rev90');m.Revenue_12m_USD=formNum(root,'rev12');m.DL_Growth_3m=formNum(root,'dlg3');m.Rev_Growth_3m=formNum(root,'revg3');m.Revenue_per_Download_SAME_COHORT=formNum(root,'rpd');m.UA_Benchmark=m.UA_Benchmark||{};m.UA_Benchmark.CPI_Median=formNum(root,'cpi');m.SAVA_Fit_100=formNum(root,'savaFit');m.SAVA_Direction_Note=formVal(root,'savaNote');modalRoot.innerHTML='';persist(`Updated market mechanic ${id}`);},{wide:true});
   }
 
   function openPublisher(id){

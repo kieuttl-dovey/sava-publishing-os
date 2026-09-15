@@ -10,7 +10,13 @@
     ['sourcing','5','Sourcing'],
     ['operations','6','Publishing Operation']
   ];
-  const STAGES = ['Lead','Qualified','Evaluation','Test','Deal','Launch','Scale'];
+  const STAGES = ['Lead','Qualified','Evaluation','Deal','Test','Launch','Scale'];
+  const SOURCING_SLA = {Lead:14, Qualified:10, Evaluation:14, Deal:30, Test:21, Launch:30, Scale:999};
+  const SOURCING_SCREENING = ['', 'Loại','Cân nhắc, cần đánh giá thêm','Tiếp tục','Tiếp tục nhưng cần chỉnh sửa'];
+  const SOURCING_STATUS = ['Đang xử lý','Tạm giữ','Thành công','Loại'];
+  const SOURCING_TEST_RESULT = ['', 'Đạt','Không đạt','Không áp dụng'];
+  const SOURCING_SOURCES = ['Inbound','Outbound','Referral','Đối tác hiện hữu','Hội nghị/Sự kiện','LinkedIn','Tìm kiếm trên Store','Nghiên cứu thị trường','Mạng lưới/Cộng đồng','Giới thiệu nội bộ','Agency/Môi giới','Đánh giá game lịch sử','Khác'];
+  const SOURCING_LOSS_REASONS = ['', 'CPI cao','Retention thấp','Monetization yếu','Marketability yếu','Product chưa hoàn thiện','Genre/Market không phù hợp','Team/Nguồn lực yếu','Không đủ cam kết','Deal/Rev Share không phù hợp','Điều khoản/quyền kiểm soát','Không phản hồi','Độ phù hợp chiến lược thấp','Đối tác dừng','Khác'];
   const EVIDENCE_STATUS = ['','Đã xác minh','Partner cung cấp','Đã trao đổi','Thiếu','N/A'];
   const GATE_STATUS = ['Đạt','Chờ xác minh','Không đạt'];
   const GAME_GATE_STATUS = ['PASS','PASS / Monitor','PENDING','FAIL'];
@@ -428,7 +434,7 @@
     content.innerHTML=`<div class="grid kpis">${kpi('Partners',db.partners.length,`${partnerStats.filter(x=>x.final==='Ưu tiên'||x.final==='Đạt').length} qualified by current logic`)}${kpi('Games',db.games.length,`${gameStats.filter(x=>/PRODUCT TEST|GREENLIGHT/.test(x.recommendation)).length} proceed signals`)}${kpi('Open high risks',openHigh,'Partner risk log')}${kpi('Active projects',opsActive,'Publishing operation portfolio')}</div>
       <div class="split">
         ${panel('Partner decision board',table(['ID','Partner','Hard Gate','Partner Fit','Conclusion','Next action'],partnerRows),'Score does not override Hard Gate.')}
-        ${panel('Sourcing funnel',table(['Stage','Count','Step conversion'],funnel),'Lead → Qualified → Evaluation → Test → Deal → Launch → Scale')}
+        ${panel('Sourcing funnel',table(['Stage','Count','Step conversion'],funnel),'Lead → Qualified → Evaluation → Deal → Test → Launch → Scale')}
       </div>
       ${panel('Attention needed',alerts.length?`<div class="grid">${alerts.slice(0,12).map(x=>`<div class="notice warn">${esc(x)}</div>`).join('')}</div>`:'<div class="notice good">No blocking items in the current local dataset.</div>','Hard Gate, pending gates and portfolio blockers')}
       ${panel('Recent activity',(db.audit||[]).slice(0,12).map(a=>`<div class="small" style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${esc(a.user)}</b> · ${esc(a.action)} <span class="muted">${esc(a.at)}</span></div>`).join('')||'<div class="empty">No local activity yet.</div>')}`;
@@ -495,7 +501,7 @@
     bindOpeners();
   }
 
-  function marketClamp100(v){const n=num(v);return n===null?null:Math.max(0,Math.min(100,n));}
+  function marketClamp100(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(100,n)):null;}
   function marketPositive(v){const n=num(v);return n!==null&&n>0?n:null;}
   function marketPctRank(value,values,{inverse=false}={}){
     const n=num(value),xs=(values||[]).map(num).filter(x=>x!==null).sort((a,b)=>a-b);if(n===null||!xs.length)return null;
@@ -655,15 +661,100 @@
     bindOpeners();
   }
 
+  function sourcingDate(x,key){return x?.[key]||x?.milestones?.[key]||'';}
+  function sourcingQualified(x){
+    const sr=String(x?.screeningResult||'').trim();
+    if(sr==='Loại') return 'Không';
+    if(['Cân nhắc, cần đánh giá thêm','Tiếp tục','Tiếp tục nhưng cần chỉnh sửa'].includes(sr)) return 'Có';
+    if(x?.qualified==='Có'||x?.qualified===true||sourcingDate(x,'qualifiedDate')) return 'Có';
+    if(x?.qualified==='Không'||x?.qualified===false) return 'Không';
+    const si=STAGES.indexOf(x?.stage);return si>=1?'Có':'Chờ';
+  }
+  function sourcingCurrentStage(x){
+    if(sourcingDate(x,'scaleDate'))return 'Scale';
+    if(sourcingDate(x,'launchDate'))return 'Launch';
+    if(sourcingDate(x,'testDate'))return 'Test';
+    if(sourcingDate(x,'dealDate'))return 'Deal';
+    if(sourcingDate(x,'evaluationDate'))return 'Evaluation';
+    const q=sourcingQualified(x);
+    if(q==='Có')return 'Evaluation';
+    if(sourcingDate(x,'qualifiedDate'))return 'Qualified';
+    return STAGES.includes(x?.stage)&&STAGES.indexOf(x.stage)>0?x.stage:'Lead';
+  }
+  function sourcingStatus(x){return x?.screeningResult==='Loại'?'Loại':(x?.status||'Đang xử lý');}
+  function dayDiff(a,b){if(!a||!b)return null;const x=new Date(a),y=new Date(b);if(Number.isNaN(x.getTime())||Number.isNaN(y.getTime()))return null;return Math.max(0,Math.floor((y-x)/86400000));}
+  function sourcingStageStart(x,stage=sourcingCurrentStage(x)){
+    const map={Lead:'leadDate',Qualified:'qualifiedDate',Evaluation:'evaluationDate',Deal:'dealDate',Test:'testDate',Launch:'launchDate',Scale:'scaleDate'};
+    return sourcingDate(x,map[stage])||((stage==='Evaluation')?sourcingDate(x,'qualifiedDate'):'')||x?.createdAt||'';
+  }
+  function sourcingDaysInStage(x){const st=sourcingStageStart(x);return st?dayDiff(st,today()):null;}
+  function sourcingPipelineAlert(x){const stage=sourcingCurrentStage(x),days=sourcingDaysInStage(x);if(sourcingStatus(x)!=='Đang xử lý'||days===null)return '—';return days>(SOURCING_SLA[stage]??999)?'STUCK':'OK';}
+  function sourcingOverdue(x){if(sourcingStatus(x)!=='Đang xử lý'||!x?.actionDeadline)return false;return x.actionDeadline<today();}
+  function sourcingReached(x,stage){
+    if(stage==='Lead')return true;
+    if(stage==='Qualified'||stage==='Evaluation')return sourcingQualified(x)==='Có';
+    const idx=STAGES.indexOf(sourcingCurrentStage(x)),target=STAGES.indexOf(stage);return idx>=target;
+  }
+  function sourcingMarketAlignment(x){
+    const g=String(x?.genre||'').toLowerCase();
+    if(!g)return {group:'Chưa xác định',label:'Chưa xác định',score:null};
+    if(g.includes('rpg')||/\btd\b/.test(g))return {group:'RPG / TD',label:'Cao — Đúng trọng tâm',score:100};
+    if(g.includes('simulation'))return {group:'Simulation',label:'Cao — Đúng trọng tâm',score:100};
+    if(g.includes('platform'))return {group:'Platform',label:'Cao — Đúng trọng tâm',score:100};
+    if(g.includes('puzzle')||g.includes('block blast'))return {group:'Puzzle',label:'Cao — Đúng trọng tâm',score:100};
+    if(g.includes('hybrid casual')||(g.includes('casual')&&!g.includes('hyper')))return {group:'Casual / Hybrid Casual',label:'Cao — Đúng trọng tâm',score:100};
+    if(g.includes('hyper')||g.includes('strategy'))return {group:'Hyper / Strategy liền kề',label:'Trung bình — Liền kề',score:60};
+    return {group:'Khác / Ngoài trọng tâm',label:'Thấp — Ngoài trọng tâm',score:20};
+  }
+  function sourcingScreeningAction(x){
+    const q=sourcingQualified(x),a=sourcingMarketAlignment(x);
+    if(a.score===null)return 'Cần bổ sung Genre / mapping thị trường';
+    if(a.score===100&&q==='Có')return 'Ưu tiên — đúng hướng & Qualified';
+    if(a.score===100&&q==='Không')return 'Đúng thị trường / game yếu — loại';
+    if(a.score===60&&q==='Có')return 'Ngoại lệ — Qualified, hướng liền kề';
+    if(a.score===60&&q==='Không')return 'Giảm ưu tiên — liền kề & bị loại';
+    if(a.score===20&&q==='Có')return 'Ngoại lệ — ngoài trọng tâm; cần bằng chứng';
+    if(a.score===20&&q==='Không')return 'Dừng — độ phù hợp chiến lược thấp & bị loại';
+    return 'Chờ Screening';
+  }
+  function sourcingFunnelVisual(passed,current){
+    return `<div class="sourcing-funnel">${STAGES.map((st,i)=>{const prev=i?passed[STAGES[i-1]]:null;const conv=i===0?null:(prev?passed[st]/prev:null);return `<div class="sourcing-funnel-step"><div class="sourcing-funnel-name">${esc(st)}</div><strong>${passed[st]}</strong><small>${i===0?'Tổng Lead':conv===null?'—':`${(conv*100).toFixed(1)}% từ bước trước`}</small><span>${current[st]||0} đang xử lý</span></div>${i<STAGES.length-1?'<div class="sourcing-funnel-arrow">→</div>':''}`}).join('')}</div>`;
+  }
+  function sourcingDistribution(items,keyFn){const map={};items.forEach(x=>{const k=keyFn(x)||'Chưa có';map[k]=(map[k]||0)+1});return map;}
+  function sourcingBarRows(map,total){return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="sourcing-bar-row"><span>${esc(k)}</span><div class="sourcing-bar"><i style="width:${total?Math.max(2,v/total*100):0}%"></i></div><b>${v}</b><small>${total?`${(v/total*100).toFixed(1)}%`:'—'}</small></div>`).join('');}
+  function sourcingTransitionAvg(items,a,b){const vals=items.map(x=>dayDiff(sourcingDate(x,a),sourcingDate(x,b))).filter(v=>v!==null);return vals.length?vals.reduce((s,v)=>s+v,0)/vals.length:null;}
   function renderSourcing(){
-    setHeader('Sourcing Funnel','5 · Lead → Qualified → Evaluation → Test → Deal → Launch → Scale');
-    const counts=Object.fromEntries(STAGES.map(s=>[s,(db.sourcing||[]).filter(x=>x.stage===s).length]));
-    const cards=STAGES.map(stage=>`<div class="kanban-col"><div class="kanban-head"><span>${stage}</span><span class="badge">${counts[stage]}</span></div>${(db.sourcing||[]).filter(x=>x.stage===stage&&includesSearch(x.leadName,x.partnerId,x.source,x.owner)).map(x=>`<div class="kanban-card"><h4>${esc(x.leadName||x.partnerId)}</h4><p>${esc(x.source||'No source')} · ${esc(x.owner||'No owner')}</p><p>${esc(x.nextAction||'No next action')}</p><select data-sourcing-stage="${x.id}">${STAGES.map(s=>`<option ${s===x.stage?'selected':''}>${s}</option>`).join('')}</select><div style="margin-top:7px"><button class="linkish" data-open-sourcing="${x.id}">Edit</button></div></div>`).join('')}</div>`).join('');
-    const conv=STAGES.map((s,i)=>`<tr><td>${s}</td><td class="num">${counts[s]}</td><td class="num">${i===0?'—':counts[STAGES[i-1]]?((counts[s]/counts[STAGES[i-1]])*100).toFixed(1)+'%':'—'}</td></tr>`);
-    content.innerHTML=`<div class="grid kpis">${kpi('Leads',(db.sourcing||[]).length)}${kpi('Qualified+',STAGES.slice(1).reduce((n,s)=>n+counts[s],0))}${kpi('Deals+',counts.Deal+counts.Launch+counts.Scale)}${kpi('Scale',counts.Scale)}</div>
-      ${panel('Sourcing board',`<div class="kanban">${cards}</div>`,'Use conversion at each step to diagnose bottlenecks, not just lead volume.',`<button class="primary" data-action="add-sourcing">+ Lead</button>`)}
-      ${panel('Conversion snapshot',table(['Stage','Count','From previous stage'],conv),'Seeded stages were derived conservatively from current partner status; update with real sourcing history going forward.')}`;
-    document.querySelectorAll('[data-sourcing-stage]').forEach(sel=>sel.onchange=()=>{const x=byId(db.sourcing,sel.dataset.sourcingStage);x.stage=sel.value;x.updatedAt=new Date().toISOString();persist(`Moved sourcing item ${x.id} to ${sel.value}`);});
+    setHeader('Sourcing Funnel & KPI','5 · Lead → Qualified → Evaluation → Deal → Test → Launch → Scale');
+    const items=(db.sourcing||[]).filter(x=>includesSearch(x.id,x.leadName,x.game,x.studio,x.partnerId,x.source,x.owner,x.genre,x.screeningResult));
+    const all=db.sourcing||[];
+    const passed=Object.fromEntries(STAGES.map(st=>[st,all.filter(x=>sourcingReached(x,st)).length]));
+    const current=Object.fromEntries(STAGES.map(st=>[st,all.filter(x=>sourcingCurrentStage(x)===st&&sourcingStatus(x)==='Đang xử lý').length]));
+    const screened=all.filter(x=>x.screeningResult),qualified=all.filter(x=>sourcingQualified(x)==='Có').length;
+    const passRate=all.length?qualified/all.length:null;
+    const stuck=all.filter(x=>sourcingPipelineAlert(x)==='STUCK').length,overdue=all.filter(sourcingOverdue).length;
+    const testDone=all.filter(x=>['Đạt','Không đạt'].includes(x.testResult));const testPass=testDone.length?testDone.filter(x=>x.testResult==='Đạt').length/testDone.length:null;
+    const screeningDist=sourcingDistribution(screened,x=>x.screeningResult);
+    const bottlenecks=STAGES.slice(1).map((st,i)=>{const prev=passed[STAGES[i]],cur=passed[st];return {label:`${STAGES[i]} → ${st}`,rate:prev?cur/prev:null};}).filter(x=>x.rate!==null).sort((a,b)=>a.rate-b.rate);
+    const bottleneck=bottlenecks[0];
+    const avgTransitions=[['Lead → Qualified','leadDate','qualifiedDate',14],['Qualified → Evaluation','qualifiedDate','evaluationDate',10],['Evaluation → Deal','evaluationDate','dealDate',30],['Deal → Test','dealDate','testDate',21],['Test → Launch','testDate','launchDate',30],['Launch → Scale','launchDate','scaleDate',30]];
+    const speedRows=avgTransitions.map(([label,a,b,sla])=>{const avg=sourcingTransitionAvg(all,a,b);return `<tr><td>${esc(label)}</td><td class="num">${avg===null?'—':fmt(avg,1)+' ngày'}</td><td class="num">${sla} ngày</td><td>${avg===null?badge('Chưa có dữ liệu'):avg>sla?'<span class="badge bad">CHẬM</span>':'<span class="badge good">OK</span>'}</td></tr>`;});
+    const activeRows=items.filter(x=>sourcingStatus(x)==='Đang xử lý').sort((a,b)=>Number(sourcingPipelineAlert(b)==='STUCK')-Number(sourcingPipelineAlert(a)==='STUCK')||Number(sourcingOverdue(b))-Number(sourcingOverdue(a))).slice(0,25).map(x=>{const stage=sourcingCurrentStage(x),days=sourcingDaysInStage(x),align=sourcingMarketAlignment(x),alert=sourcingPipelineAlert(x);return `<tr><td><button class="linkish" data-open-sourcing="${esc(x.id)}">${esc(x.id)}</button></td><td><b>${esc(x.game||x.leadName||'—')}</b><div class="small muted">${esc(x.studio||'')}</div></td><td>${esc(x.source||'—')}</td><td>${esc(x.owner||'Chưa có')}</td><td>${badge(stage)}</td><td>${days===null?'—':`${days} / ${SOURCING_SLA[stage]??'—'} ngày`}</td><td>${alert==='STUCK'?'<span class="badge bad">STUCK</span>':badge(alert)}</td><td><b>${esc(align.label)}</b><div class="small muted">${align.score===null?'—':align.score+'/100'}</div></td><td>${esc(clipText(x.nextAction||'—',90))}<div class="small ${sourcingOverdue(x)?'danger-text':'muted'}">${x.actionDeadline?sourcingOverdue(x)?'Quá hạn · '+esc(x.actionDeadline):'Hạn '+esc(x.actionDeadline):'Chưa có deadline'}</div></td><td><button class="ghost" data-open-sourcing="${esc(x.id)}">Edit</button></td></tr>`;});
+    const pipelineRows=items.slice(0,250).map(x=>{const align=sourcingMarketAlignment(x);return `<tr><td><button class="linkish" data-open-sourcing="${esc(x.id)}">${esc(x.id)}</button></td><td>${esc(x.game||x.leadName||'—')}<div class="small muted">${esc(x.studio||'')}</div></td><td>${esc(x.genre||'—')}</td><td>${esc(x.screeningResult||'Chưa Screening')}</td><td>${badge(sourcingQualified(x))}</td><td>${badge(sourcingCurrentStage(x))}</td><td>${badge(sourcingStatus(x))}</td><td>${esc(align.label)}</td><td>${esc(x.source||'—')}</td><td>${esc(x.owner||'—')}</td><td>${esc(clipText(x.nextAction||'—',85))}</td></tr>`;});
+    const sourceGroups={};all.forEach(x=>{const k=x.source||'Chưa có nguồn';(sourceGroups[k]||(sourceGroups[k]=[])).push(x)});
+    const sourceRows=Object.entries(sourceGroups).map(([source,list])=>{const c=Object.fromEntries(STAGES.map(st=>[st,list.filter(x=>sourcingReached(x,st)).length]));return `<tr><td>${esc(source)}</td><td class="num">${list.length}</td><td class="num">${c.Qualified}</td><td class="num">${c.Deal}</td><td class="num">${c.Test}</td><td class="num">${c.Launch}</td><td class="num">${c.Scale}</td><td class="num">${list.length?pct(c.Qualified/list.length,1):'—'}</td><td class="num">${c.Deal?pct(c.Test/c.Deal,1):'—'}</td><td class="num">${list.length?pct(c.Scale/list.length,1):'—'}</td></tr>`;});
+    const bdGroups={};all.filter(x=>x.owner).forEach(x=>{const k=x.owner;(bdGroups[k]||(bdGroups[k]=[])).push(x)});
+    const bdRows=Object.entries(bdGroups).map(([owner,list])=>{const c=Object.fromEntries(STAGES.map(st=>[st,list.filter(x=>sourcingReached(x,st)).length]));const st=list.filter(x=>sourcingPipelineAlert(x)==='STUCK').length;return `<tr><td>${esc(owner)}</td><td class="num">${list.length}</td><td class="num">${c.Qualified}</td><td class="num">${c.Deal}</td><td class="num">${c.Test}</td><td class="num">${c.Launch}</td><td class="num">${c.Scale}</td><td class="num">${list.length?pct(c.Deal/list.length,1):'—'}</td><td class="num">${list.length?pct(c.Scale/list.length,1):'—'}</td><td class="num">${st}</td></tr>`;});
+    const lossMap=sourcingDistribution(all.filter(x=>x.reasonLost),x=>x.reasonLost),lossTotal=Object.values(lossMap).reduce((a,b)=>a+b,0);
+    const alignMap=sourcingDistribution(all,x=>sourcingMarketAlignment(x).label),alignTotal=all.length;
+    const guide=`<div class="sourcing-guide"><div><b>Qualified</b><span>Kết quả Screening khác “Loại” → Có và đi vào Evaluation.</span></div><div><b>Deal trước Test</b><span>Test chỉ được bắt đầu sau khi Deal/ký hợp đồng đã chốt.</span></div><div><b>Lead đang xử lý</b><span>Bắt buộc có BD phụ trách + Hành động tiếp theo + Deadline.</span></div><div><b>Đánh giá BD</b><span>Không chỉ nhìn số Lead; ưu tiên Chất lượng + Chuyển đổi + Tốc độ + Kết quả.</span></div></div>`;
+    content.innerHTML=`<div class="grid kpis sourcing-kpis">${kpi('Tổng Lead',all.length,'Toàn bộ cơ hội đã ghi nhận')}${kpi('Tỷ lệ qua Screening',passRate===null?'—':pct(passRate,1),`${qualified} Qualified`)}${kpi('Deal đã ký',passed.Deal,'Test chỉ sau Deal')}${kpi('Scale',passed.Scale,'Kết quả cuối Funnel')}${kpi('Cần xử lý',stuck+overdue,`${stuck} STUCK · ${overdue} quá hạn`)}</div>
+      ${panel('Funnel Sourcing',sourcingFunnelVisual(passed,current)+`<div class="sourcing-target"><b>Target tham chiếu Strategy:</b> 100 Qualified → 30 Evaluation/Pre-Screen → 10 Test → 5 Validation → 2 Launch → 1 Scale. Deal là bước ký hợp đồng thực tế trước Test và không có target riêng trong Strategy.</div>`,'Theo dõi số lượng + chuyển đổi từng bước để tìm điểm nghẽn, không đánh giá Sourcing chỉ bằng số Lead.')}
+      <div class="sourcing-two-col">${panel('Chất lượng Screening',`<div class="sourcing-quality">${sourcingBarRows(screeningDist,screened.length||1)}</div><div class="sourcing-summary-line"><span><b>Tỷ lệ Test đạt:</b> ${testPass===null?'—':pct(testPass,1)}</span><span><b>Lead → Scale:</b> ${all.length?pct(passed.Scale/all.length,2):'—'}</span></div>`,'Screening quyết định Qualified. Dữ liệu lịch sử có Screening được tính vào Lead/Qualified/Evaluation.')}${panel('Điểm nghẽn & Tốc độ',`<div class="bottleneck-card"><span>Điểm nghẽn chính</span><strong>${esc(bottleneck?.label||'Chưa đủ dữ liệu')}</strong><b>${bottleneck?.rate===null||bottleneck?.rate===undefined?'—':pct(bottleneck.rate,1)}</b></div>${table(['Chuyển giai đoạn','Số ngày TB','SLA','Đánh giá'],speedRows)}`,'Chỉ tính tốc độ với case có đủ ngày chuyển giai đoạn; dữ liệu lịch sử thiếu ngày không bị đưa vào average.')}</div>
+      ${panel('Pipeline cần hành động',activeRows.length?table(['ID','Game / Studio','Nguồn','BD','Giai đoạn','Ngày / SLA','Cảnh báo','Phù hợp thị trường','Hành động tiếp theo',''],activeRows,'sourcing-action-table'):'<div class="empty">Chưa có Lead đang xử lý phù hợp bộ lọc.</div>','Ưu tiên xử lý STUCK và Hành động tiếp theo quá hạn.',`<button class="primary" data-action="add-sourcing">+ Lead</button>`)}
+      <div class="sourcing-two-col">${panel('Hiệu quả theo nguồn',sourceRows.length?table(['Nguồn','Lead','Qualified','Deal','Test','Launch','Scale','Lead→Qualified','Deal→Test','Scale/Lead'],sourceRows,'sourcing-source-table'):'<div class="empty">Chưa có dữ liệu nguồn.</div>','So sánh chất lượng nguồn Sourcing thay vì chỉ so Lead volume.')}${panel('Hiệu quả BD',bdRows.length?table(['BD phụ trách','Lead','Qualified','Deal','Test','Launch','Scale','Lead→Deal','Lead→Scale','STUCK'],bdRows,'sourcing-bd-table'):'<div class="empty">Dữ liệu lịch sử chưa có BD phụ trách; KPI này sẽ đầy dần từ dữ liệu vận hành mới.</div>','BD được đánh giá theo chuyển đổi, tốc độ và kết quả; không chỉ số Lead.')}</div>
+      <div class="sourcing-two-col">${panel('Lý do loại',lossTotal?sourcingBarRows(lossMap,lossTotal):'<div class="empty">Dữ liệu lịch sử chưa có lý do loại chi tiết. BD nên chọn lý do khi đóng Lead.</div>','Review hàng tháng để biết Lead fail vì Product, Market, Team hay Deal.')}${panel('Mức phù hợp với định hướng thị trường',sourcingBarRows(alignMap,alignTotal||1),'Đây là độ khớp với hướng Sourcing hiện hành, KHÔNG phải Sức hấp dẫn thị trường /100 và không thay thế Screening.')}</div>
+      ${panel('Nguyên tắc vận hành',guide,'Nguồn: workbook SAVA Sourcing Funnel & KPI. Review Funnel hàng tuần; review Nguồn / Lý do loại / Điểm nghẽn hàng tháng.')}
+      ${panel('Toàn bộ Pipeline',`<details class="market-raw-details"><summary>Xem ${items.length} Lead theo bộ lọc hiện tại</summary>${table(['Lead ID','Game / Studio','Genre','Screening','Qualified','Giai đoạn','Trạng thái','Phù hợp thị trường','Nguồn','BD','Hành động'],pipelineRows,'sourcing-pipeline-table')}</details>`,'Các Lead lịch sử thiếu ngày/người phụ trách vẫn được giữ để tính chất lượng Screening, nhưng không dùng để suy diễn tốc độ.')}`;
     bindOpeners();
   }
 
@@ -1028,10 +1119,24 @@
       g.scorecard=g.scorecard||{};Object.assign(g.scorecard,{marketSize:formNum(root,'marketSize'),growth:formNum(root,'growth'),entryAccess:formNum(root,'entry'),marketMonetization:formNum(root,'marketMon'),marketUaScalability:formNum(root,'marketUa'),readiness:formNum(root,'readiness'),dealEconomics:formNum(root,'deal'),savaFit:formNum(root,'savaFit'),dataCompleteness:formNum(root,'completeness'),evidenceQuality:formNum(root,'evidenceQ'),uaTest:formNum(root,'uaTest'),retention:formNum(root,'retention'),engagement:formNum(root,'engagement'),monetizationTest:formNum(root,'monTest'),gamefeelTest:formNum(root,'gamefeel'),decisionNotes:formVal(root,'notes')});const der=gameDerived(g);Object.assign(g.scorecard,{marketScore:der.market,productScore:der.product,preScanScore:der.prescan,finalScore:der.final,hardGate:der.hard,decisionStage:der.stage,recommendation:der.recommendation});if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
   }
 
+  function sourcingEditGuide(){return `<div class="sourcing-edit-guide"><div class="guide-title">Hướng dẫn BD</div><div class="guide-grid"><div><b>1. Screening → Qualified</b><p>“Loại” = Không Qualified. “Cân nhắc / Tiếp tục / Tiếp tục nhưng cần chỉnh sửa” = Qualified và vào Evaluation.</p></div><div><b>2. Deal → Test</b><p>Không nhập Ngày Test nếu chưa có Ngày Deal/ký hợp đồng. Test chỉ bắt đầu sau Deal.</p></div><div><b>3. Lead đang xử lý</b><p>Bắt buộc có BD phụ trách, Hành động tiếp theo và Hạn hành động để hệ thống theo dõi STUCK/quá hạn.</p></div><div><b>4. Market Fit</b><p>Mức phù hợp thị trường chỉ đo độ khớp với hướng Sourcing; không thay thế Screening và không tự suy diễn Sức hấp dẫn thị trường.</p></div></div></div>`;}
   function openSourcing(id){
-    let x=byId(db.sourcing,id);const isNew=!x;if(!x)x={id:`SRC-${String(db.sourcing.length+1).padStart(3,'0')}`,partnerId:'',gameId:'',leadName:'',stage:'Lead'};
-    const body=`<div class="form-grid">${fText('id','ID',x.id)}${fText('lead','Lead / Studio / Game',x.leadName||'')}${fSelect('partner','Partner link',x.partnerId||'', ['',...db.partners.map(p=>p.id)])}${fSelect('game','Game link',x.gameId||'', ['',...db.games.map(g=>g.id)])}${fText('source','Source',x.source||'')}${fSelect('stage','Stage',x.stage||'Lead',STAGES)}${fText('owner','Owner',x.owner||'')}${fText('created','Created date',x.createdAt?.slice?.(0,10)||x.createdAt||'','','date')}${fArea('next','Next action',x.nextAction||'')}${fArea('lost','Reason lost / disqualified',x.reasonLost||'')}${fArea('notes','Notes',x.notes||'')}</div>`;
-    modal(isNew?'Add sourcing lead':x.leadName||x.id,body,(root)=>{x.id=formVal(root,'id');x.leadName=formVal(root,'lead');x.partnerId=formVal(root,'partner');x.gameId=formVal(root,'game');x.source=formVal(root,'source');x.stage=formVal(root,'stage');x.owner=formVal(root,'owner');x.createdAt=formVal(root,'created');x.updatedAt=new Date().toISOString();x.nextAction=formVal(root,'next');x.reasonLost=formVal(root,'lost');x.notes=formVal(root,'notes');if(isNew)db.sourcing.push(x);modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} sourcing ${x.id}`);});
+    let x=byId(db.sourcing,id);const isNew=!x;if(!x)x={id:`SRC-${String((db.sourcing||[]).filter(y=>/^SRC-/.test(y.id||'')).length+1).padStart(3,'0')}`,partnerId:'',gameId:'',leadName:'',game:'',studio:'',source:'',screeningResult:'',status:'Đang xử lý'};
+    const align=sourcingMarketAlignment(x),stage=sourcingCurrentStage(x),q=sourcingQualified(x),alert=sourcingPipelineAlert(x);
+    const partner=byId(db.partners,x.partnerId);const partnerRisk=(db.partnerRisks||[]).filter(r=>r.partnerId===x.partnerId&&r.status!=='Đã đóng');
+    const partnerRef=partner?`<div class="sourcing-ref-grid"><div><span>Hard Gate đối tác</span><b>${esc(partnerDerived(partner).hard)}</b></div><div><span>Mức độ phù hợp đối tác</span><b>${displayScore100(partnerDerived(partner).fit)}</b></div><div><span>Risk đang mở</span><b>${partnerRisk.length}</b></div><div><span>Mô hình hợp tác</span><b>${esc(profile(partner,'Financial_Model')||'—')}</b></div></div>`:'<div class="notice">Chưa link với Partner Selection. Có thể chọn Partner ở phần Thông tin Lead nếu đây là đối tác đã biết.</div>';
+    const body=`${sourcingEditGuide()}<div class="sourcing-derived"><div><span>Qualified</span><b>${esc(q)}</b></div><div><span>Giai đoạn hiện tại</span><b>${esc(stage)}</b></div><div><span>Cảnh báo Pipeline</span><b>${esc(alert)}</b></div><div><span>Phù hợp thị trường</span><b>${esc(align.label)}${align.score===null?'':` · ${align.score}/100`}</b></div></div>
+      <div class="section-title">1. Thông tin Lead</div><div class="form-grid three-cols">${fText('id','Lead ID',x.id)}${fText('gameName','Game',x.game||x.leadName||'')}${fText('studio','Studio / Đối tác',x.studio||'')}${fText('country','Quốc gia',x.country||'')}${fText('genre','Genre',x.genre||'')}${fSelect('source','Nguồn',x.source||'',SOURCING_SOURCES)}${fText('owner','BD phụ trách',x.owner||'')}${fSelect('partner','Link Partner Selection',x.partnerId||'', ['',...db.partners.map(p=>p.id)])}${fSelect('gameLink','Link Game Selection',x.gameId||'', ['',...db.games.map(g=>g.id)])}</div>
+      <div class="section-title">2. Screening & trạng thái</div><div class="form-grid three-cols">${fSelect('screening','Kết quả Screening',x.screeningResult||'',SOURCING_SCREENING)}${fSelect('status','Trạng thái',sourcingStatus(x),SOURCING_STATUS)}${fSelect('testResult','Kết quả Test',x.testResult||'',SOURCING_TEST_RESULT)}${fSelect('lost','Lý do loại',x.reasonLost||'',SOURCING_LOSS_REASONS)}${fArea('next','Hành động tiếp theo',x.nextAction||'','full')}${fText('deadline','Hạn hành động',x.actionDeadline||'','','date')}${fArea('notes','Ghi chú',x.notes||'','full')}</div>
+      <div class="section-title">3. Mốc Funnel</div><div class="form-grid three-cols">${fText('leadDate','Ngày Lead',sourcingDate(x,'leadDate')||x.createdAt?.slice?.(0,10)||'','','date')}${fText('qualifiedDate','Ngày Qualified',sourcingDate(x,'qualifiedDate'),'','date')}${fText('evaluationDate','Ngày Evaluation',sourcingDate(x,'evaluationDate'),'','date')}${fText('dealDate','Ngày Deal / ký',sourcingDate(x,'dealDate'),'','date')}${fText('testDate','Ngày Test',sourcingDate(x,'testDate'),'','date')}${fText('launchDate','Ngày Launch',sourcingDate(x,'launchDate'),'','date')}${fText('scaleDate','Ngày Scale',sourcingDate(x,'scaleDate'),'','date')}</div>
+      <div class="section-title">4. Tham chiếu Partner</div>${partnerRef}
+      <div class="section-title">5. Tham chiếu Market Intelligence</div><div class="sourcing-ref-grid"><div><span>Nhóm chiến lược</span><b>${esc(align.group)}</b></div><div><span>Mức phù hợp</span><b>${esc(align.label)}</b></div><div><span>Điểm phù hợp</span><b>${align.score===null?'—':align.score+'/100'}</b></div><div><span>Kết hợp Screening</span><b>${esc(sourcingScreeningAction(x))}</b></div></div>${x.historicalEvaluation?`<div class="section-title">6. Tham chiếu đánh giá lịch sử</div><div class="sourcing-ref-grid"><div><span>Kết quả</span><b>${esc(x.historicalEvaluation.result||'—')}</b></div><div><span>Mức hoàn thiện</span><b>${esc(x.historicalEvaluation.completion||'—')}</b></div><div><span>Tiềm năng</span><b>${esc(x.historicalEvaluation.potential||'—')}</b></div><div><span>Monetization</span><b>${esc(x.historicalEvaluation.monetization||'—')}</b></div></div>`:''}`;
+    modal(isNew?'Thêm Lead Sourcing':`${x.id} · ${x.game||x.leadName||x.studio||''}`,body,(root)=>{
+      const screening=formVal(root,'screening'),status=screening==='Loại'?'Loại':formVal(root,'status');const owner=formVal(root,'owner'),next=formVal(root,'next'),deadline=formVal(root,'deadline');const dealDate=formVal(root,'dealDate'),testDate=formVal(root,'testDate');
+      if(testDate&&!dealDate){toast('Không thể lưu: Test chỉ bắt đầu sau khi Deal/ký hợp đồng.');return;}
+      if(status==='Đang xử lý'&&(!owner||!next||!deadline)){toast('Lead đang xử lý cần BD phụ trách + Hành động tiếp theo + Deadline.');return;}
+      x.id=formVal(root,'id');x.game=formVal(root,'gameName');x.leadName=x.game||formVal(root,'studio');x.studio=formVal(root,'studio');x.country=formVal(root,'country');x.genre=formVal(root,'genre');x.source=formVal(root,'source');x.owner=owner;x.partnerId=formVal(root,'partner');x.gameId=formVal(root,'gameLink');x.screeningResult=screening;x.qualified=sourcingQualified({...x,screeningResult:screening});x.status=status;x.testResult=formVal(root,'testResult');x.reasonLost=formVal(root,'lost');x.nextAction=next;x.actionDeadline=deadline;x.notes=formVal(root,'notes');x.leadDate=formVal(root,'leadDate');x.qualifiedDate=formVal(root,'qualifiedDate');x.evaluationDate=formVal(root,'evaluationDate');x.dealDate=dealDate;x.testDate=testDate;x.launchDate=formVal(root,'launchDate');x.scaleDate=formVal(root,'scaleDate');x.stage=sourcingCurrentStage(x);x.updatedAt=new Date().toISOString();if(!x.createdAt)x.createdAt=x.leadDate||today();if(isNew)db.sourcing.push(x);modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} sourcing ${x.id}`);
+    },{wide:true,saveText:'Lưu Lead'});
   }
 
   function evaluateProject(p,m){

@@ -1,3 +1,32 @@
+# SAVA Publishing OS v0.15 — Market Opportunity Map Fix
+
+## v0.15 changes
+- Sửa Bản đồ cơ hội: mechanic có Sức hấp dẫn >=70 và xu hướng tích cực vẫn vào **Ưu tiên kiểm thử** khi `Phù hợp SAVA /100` chưa nhập.
+- `Phù hợp SAVA` để trống được hiểu đúng là **chưa có dữ liệu**, không còn bị quy thành 0.
+- Mức **Ưu tiên tìm kiếm game/đối tác** vẫn yêu cầu SAVA Fit >=70 để tránh chủ động sourcing khi chưa xác nhận strategic fit.
+- Giữ nguyên logic **Theo dõi chọn lọc** cho market suy giảm nhưng khả năng kiếm tiền tốt.
+- Sửa lỗi khai báo lặp trong phần tính Market Analytics và tăng cache version lên v0.15.
+
+# SAVA Publishing OS v0.14 — Sourcing Funnel & KPI
+
+## v0.14 changes — Sourcing theo workbook vận hành thực tế
+
+Module **Sourcing** được xây lại từ `SAVA_Sourcing_Funnel_KPI_Thuan_Viet(1).xlsx`.
+
+- Chuẩn hóa flow thành **Lead → Qualified → Evaluation → Deal → Test → Launch → Scale**. Deal/ký hợp đồng luôn đứng trước Test.
+- Screening là gate quyết định Qualified: `Loại` = Không Qualified; `Cân nhắc / Tiếp tục / Tiếp tục nhưng cần chỉnh sửa` = Qualified và đi vào Evaluation.
+- Funnel dùng **số case đã đi qua từng bước**, không dùng số case đang nằm ở stage để tính conversion.
+- Dashboard Sourcing có 4 nhóm KPI theo workbook: **Số lượng · Chuyển đổi · Tốc độ · Chất lượng**, kèm STUCK/quá hạn và điểm nghẽn chính.
+- SLA tham chiếu: Lead 14 ngày · Qualified 10 · Evaluation 14 · Deal 30 · Test 21 · Launch 30 · Scale 999.
+- Thêm phân tích **Hiệu quả theo nguồn**, **Hiệu quả BD**, **Lý do loại**, **Mức phù hợp với định hướng thị trường**.
+- Market Fit trong Sourcing chỉ đo độ khớp với hướng sourcing hiện hành (100/60/20), **không phải Sức hấp dẫn thị trường /100 và không thay thế Screening**.
+- Edit Lead có hướng dẫn BD ngay trong form. Lead `Đang xử lý` bắt buộc có **BD phụ trách + Hành động tiếp theo + Deadline**. Hệ thống chặn lưu `Ngày Test` nếu chưa có `Ngày Deal / ký`.
+- 120 bản ghi Screening lịch sử trong workbook được cung cấp qua file migration SQL riêng. Vì các bản ghi lịch sử thiếu ngày/người phụ trách, chúng được tính vào Lead/Qualified/Evaluation nhưng không dùng để suy diễn tốc độ theo thời gian.
+
+### Import dữ liệu lịch sử
+
+Chạy `SAVA_Publishing_OS_v0.14_Sourcing_History_Import.sql` **một lần** trong Supabase SQL Editor. Script chỉ thêm các ID `HIST-GE...`, không xóa hay ghi đè các Lead Sourcing hiện tại.
+
 # SAVA Publishing OS v0.13 — Market Opportunity Map Logic
 
 ## v0.13 changes — Bản đồ cơ hội phản ánh đúng market trước khi có SAVA Fit

@@ -176,3 +176,40 @@ body{background:linear-gradient(180deg,#F7FAFF 0%,#F3F7FF 100%)}
 @media(max-width:1100px){.market-guide-current{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.market-opportunity-map,.market-guide-current{grid-template-columns:1fr}.market-rule-table{font-size:9.5px}}
 .market-dot.selective circle{fill:#00A6C7;fill-opacity:.72}
+
+/* v0.14 · Sourcing Funnel & KPI */
+.sourcing-kpis{grid-template-columns:repeat(5,minmax(0,1fr));}
+.sourcing-funnel{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding:4px 0 8px;}
+.sourcing-funnel-step{min-width:138px;flex:1;border:1px solid #dfe5f2;border-radius:14px;padding:14px;background:linear-gradient(180deg,#fff,#f8fbff);position:relative;}
+.sourcing-funnel-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px;color:#3a3a50;margin-bottom:8px;}
+.sourcing-funnel-step strong{display:block;font:700 28px/1 'Space Grotesk',sans-serif;color:#03041c;}
+.sourcing-funnel-step small{display:block;margin-top:6px;color:#6f6c8f;min-height:28px;}
+.sourcing-funnel-step span{display:inline-block;margin-top:8px;padding:4px 7px;border-radius:999px;background:#edecff;color:#3a3a50;font-size:11px;font-weight:700;}
+.sourcing-funnel-arrow{align-self:center;color:#0078d7;font-weight:700;font-size:22px;}
+.sourcing-target{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f6f8fc;color:#56566f;font-size:12px;}
+.sourcing-two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.sourcing-quality{display:grid;gap:10px;}
+.sourcing-bar-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(110px,2fr) 40px 56px;gap:9px;align-items:center;font-size:12px;}
+.sourcing-bar{height:8px;background:#e8edf6;border-radius:999px;overflow:hidden;}
+.sourcing-bar i{display:block;height:100%;background:linear-gradient(90deg,#0741e1,#00aff0);border-radius:999px;}
+.sourcing-bar-row small{color:#6f6c8f;text-align:right;}
+.sourcing-summary-line{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid #e6eaf2;margin-top:14px;padding-top:12px;color:#3a3a50;font-size:12px;}
+.bottleneck-card{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;margin-bottom:12px;background:#fff7e8;border:1px solid #f3d8a6;border-radius:12px;}
+.bottleneck-card span{grid-column:1/-1;color:#8a5b0a;font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.04em;}
+.bottleneck-card strong{color:#5d3b00;}.bottleneck-card b{color:#d47a00;}
+.danger-text{color:#cc2d4a!important;font-weight:600;}
+.sourcing-guide{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.sourcing-guide>div{padding:12px;border-radius:12px;border:1px solid #dce6f6;background:#f9fbff;}
+.sourcing-guide b{display:block;color:#0741e1;margin-bottom:5px;}.sourcing-guide span{display:block;color:#56566f;font-size:12px;line-height:1.45;}
+.sourcing-edit-guide{border:1px solid #cfe0ff;background:#f5f9ff;border-radius:14px;padding:14px;margin-bottom:16px;}
+.sourcing-edit-guide .guide-title{font:700 13px 'Space Grotesk',sans-serif;color:#0741e1;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;}
+.sourcing-edit-guide .guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.sourcing-edit-guide .guide-grid>div{background:#fff;border:1px solid #e1e8f5;border-radius:10px;padding:10px;}
+.sourcing-edit-guide p{margin:4px 0 0;color:#6f6c8f;font-size:12px;line-height:1.45;}
+.sourcing-derived,.sourcing-ref-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px;}
+.sourcing-derived>div,.sourcing-ref-grid>div{border:1px solid #e0e5ef;border-radius:10px;padding:10px;background:#fff;}
+.sourcing-derived span,.sourcing-ref-grid span{display:block;color:#6f6c8f;font-size:10px;text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:4px;}
+.sourcing-derived b,.sourcing-ref-grid b{font-size:12px;color:#03041c;}
+.sourcing-action-table td{vertical-align:top;}
+@media (max-width:1280px){.sourcing-kpis{grid-template-columns:repeat(3,minmax(0,1fr));}.sourcing-two-col{grid-template-columns:1fr}.sourcing-guide{grid-template-columns:1fr 1fr}.sourcing-derived,.sourcing-ref-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.sourcing-kpis{grid-template-columns:1fr 1fr}.sourcing-guide,.sourcing-edit-guide .guide-grid,.sourcing-derived,.sourcing-ref-grid{grid-template-columns:1fr}.sourcing-funnel-arrow{display:none}}

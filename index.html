@@ -16,8 +16,8 @@
       </div>
       <nav id="mainNav" class="nav"></nav>
       <div class="sidebar-footer">
-        <button class="ghost full" data-action="open-sync">↻ GitHub Sync</button>
-        <small id="saveState">Local autosave</small>
+        <button class="ghost full" data-action="account">👤 Account</button>
+        <small id="saveState">Connecting to Supabase…</small>
       </div>
     </aside>
     <main class="main">
@@ -28,6 +28,7 @@
         </div>
         <div class="top-actions">
           <input id="globalSearch" class="search" type="search" placeholder="Search partner / game / project..." />
+          <button class="ghost" data-action="refresh-cloud">↻ Refresh</button>
           <button class="ghost" data-action="export-json">Export</button>
           <label class="ghost file-button">Import<input id="importJson" type="file" accept="application/json" /></label>
           <button class="primary" data-action="quick-add">+ Add</button>
@@ -38,6 +39,10 @@
   </div>
   <div id="modalRoot"></div>
   <div id="toastRoot" class="toast-root"></div>
+  <div id="authRoot" hidden></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="supabase-data.js"></script>
   <script src="data/seed.js"></script>
   <script src="app.js" defer></script>
 </body>

@@ -1,80 +1,74 @@
-# SAVA Publishing OS
+# SAVA Publishing OS v0.2 — Supabase Team Edition
 
-A lightweight GitHub Pages tool that turns the current publishing spreadsheets into one operating workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
+A lightweight internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
+
+This version uses **Supabase Auth + Postgres** as the shared source of truth. GitHub Pages only hosts the static frontend.
 
 ## What is included
 
-- **Dashboard**: portfolio counts, sourcing funnel, game recommendations, partner decisions, active project gates, and recent activity.
-- **1. Partner Selection**: partner master, six hard gates, evidence coverage/confidence, weighted Partner Fit score, classification, and risk log.
-- **2. Deal Making**: commercial terms, Rev Share, MG/upfront, recoup, rights/control, contract gates, and editable negotiation fields.
-- **3. Market Intelligence**: mechanic market table from the current workbook plus an editable Publisher Landscape. The publisher landscape starts empty where the source workbooks do not contain structured benchmark data.
+- **Dashboard**: portfolio counts, sourcing funnel, game recommendations, partner decisions, active project gates, and recent database activity.
+- **1. Partner Selection**: partner master, hard gates, evidence coverage/confidence, weighted Partner Fit score, decision, and risk log.
+- **2. Deal Making**: Rev Share, MG/upfront, recoup, rights/control, KPI, responsibilities, exit/stop conditions, and negotiation fields.
+- **3. Market Intelligence**: mechanic/UA benchmark plus editable Publisher Landscape.
 - **4. Game Selection**: intake, Market Fit, Product Evidence, Publishing Readiness, Deal Economics, SAVA Publishing Fit, Pre-Scan/Post-Test score, hard-gate logic, and recommendation.
 - **5. Sourcing**: Lead → Qualified → Evaluation → Test → Deal → Launch → Scale board and conversion summary.
 - **6. Publishing Operation**: project registry, SOP stage, Hybrid IAP / Hybrid IAA gate review, KPI checks, and next actions.
 
-## Source logic retained
+## Team collaboration
 
-The seed database is built from the three supplied workbooks:
+Users sign in with Supabase email/password accounts.
 
-- `SAVA_Mobile_Game_Decision_Pub(3)_UPDATED_SCORES_SAFE (3).xlsm`
-- `Publishing_Partner_Selection_Playbook (1).xlsx`
-- `Publishing_Launching_1 (1).xlsx`
+Roles:
 
-Important rules kept in the web tool include:
+- **Admin**: read/write/delete, full database import, user-role administration through Supabase.
+- **Editor**: read/write business records; destructive deletes are blocked by RLS.
+- **Viewer**: read-only.
 
-- Partner hard gates cannot be overridden by score.
-- Partner Fit weights: Track Record 10, Team 15, Production & Execution 15, Data & Tech 10, Collaboration 15, Strategic Fit 15, Long-term 10; normalized to 100.
-- Game Selection has separate Pre-Scan and Post-Test scores and keeps the workbook's hard-gate / completeness / recommendation thresholds.
-- Publishing Operation keeps the existing Product Test, Monetization, Expansion, and Scale logic for Hybrid IAP and Hybrid IAA.
+The browser saves edits to Supabase. The app also refreshes from the shared database every 60 seconds while visible and provides a manual **Refresh** button.
 
-## Run locally
+## Supabase configuration
 
-Because the app reads `data/db.json`, serve the folder through a small local HTTP server instead of double-clicking the file.
+The frontend reads the project configuration from `supabase-config.js`:
 
-```bash
-python -m http.server 8000
+```js
+window.SAVA_SUPABASE_CONFIG = {
+  url: 'https://YOUR_PROJECT.supabase.co',
+  publishableKey: 'YOUR_PUBLISHABLE_KEY'
+};
 ```
 
-Then open `http://localhost:8000`.
+The **publishable key is intended for frontend use**. Security is enforced by Supabase Authentication and Row Level Security.
+
+Never put these values in frontend source:
+
+- `service_role` key
+- Supabase secret key
+- database password
 
 ## Deploy to GitHub Pages
 
-> **Internal-data warning:** the seeded database contains business information from the supplied workbooks. Before deploying, confirm that your GitHub Pages access is appropriate for internal data. If the site is public, do not publish the seeded `data/db.json` / `data/seed.js`. See `docs/SECURITY.md`.
+1. Upload the **contents of this folder** to the repository root.
+2. In GitHub, open **Settings → Pages**.
+3. Choose **Deploy from a branch** → `main` → `/ (root)`.
+4. Open the generated Pages URL.
+5. Sign in with a user already created under Supabase **Authentication → Users**.
 
-1. Create a GitHub repository.
-2. Upload the **contents of this folder** to the repository root.
-3. In GitHub, go to **Settings → Pages**.
-4. Choose **Deploy from a branch**, select `main` and `/ (root)`, then save.
-5. Open the GitHub Pages URL after the deployment completes.
+No build step or package installation is required.
 
-No build step or package install is required.
+## Security model
 
-## Team editing / GitHub Sync
+GitHub Pages serves static files publicly in many setups, so this deployment package intentionally contains **no seeded partner/game/deal database**. The original workbook-derived records now live in Supabase behind login + RLS.
 
-The browser always autosaves edits to `localStorage`. For shared data, click **GitHub Sync**.
+The files under `data/` are only empty fallbacks and do not contain the migrated internal records.
 
-Each team member should:
-
-1. Create a **fine-grained GitHub token** limited to this repository with **Contents: Read and write**.
-2. Open **GitHub Sync** in the app.
-3. Enter repository owner, repository name, branch (`main` by default), and `data/db.json` as the data path.
-4. Paste the token. It is stored only in the browser's `sessionStorage`; it is not written to the repository database.
-5. **Pull latest from GitHub before editing/pushing.**
-6. After reviewing local changes, use **Commit current data to GitHub**.
-
-The tool uses the GitHub file SHA from the latest Pull. If another teammate commits first, GitHub rejects the stale update instead of silently overwriting it.
-
-### Collaboration model
-
-This version is intentionally GitHub-native and has no backend. It is suitable for asynchronous team editing and auditable file history, but it is **not real-time simultaneous editing**. If the team later needs permissions, comments, live collaboration, or row-level history, the same UI/data model can be moved to Supabase/Firebase without redesigning the operating framework.
+See `docs/SECURITY.md` for details.
 
 ## Backup / restore
 
-- **Export JSON** downloads the current database.
-- **Import JSON** restores a database into the browser.
-- `data/db.json` is the shared GitHub copy.
-- `data/seed.js` is the packaged fallback if the app cannot fetch the JSON file.
+- **Export** downloads the current in-memory database as JSON.
+- **Import** is available to Admin users and syncs the imported records to Supabase.
+- Supabase remains the shared source of truth.
 
-## Data model
+## Source framework
 
-See [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) and [`docs/SOURCE_MAPPING.md`](docs/SOURCE_MAPPING.md).
+The operating logic was consolidated from the three supplied publishing workbooks. The database migration/seed SQL was already run separately in Supabase and is intentionally **not included in this deployable repository**, so publishing the frontend does not expose the seeded business data.

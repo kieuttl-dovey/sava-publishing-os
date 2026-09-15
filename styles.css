@@ -25,3 +25,12 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{displ
 .toast-root{position:fixed;right:22px;bottom:22px;z-index:200;display:grid;gap:8px}.toast{background:#13233f;color:#fff;border-radius:10px;padding:11px 14px;box-shadow:var(--shadow);font-size:12px;max-width:360px}
 @media(max-width:1100px){.grid.kpis{grid-template-columns:repeat(2,1fr)}.split,.three{grid-template-columns:1fr}.search{width:180px}.top-actions .ghost{display:none}}
 @media(max-width:760px){.app-shell{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.nav{display:grid;grid-template-columns:repeat(2,1fr)}.sidebar-footer{display:none}.topbar{position:relative;height:auto;padding:18px;align-items:flex-start;gap:12px;flex-direction:column}.top-actions{width:100%;flex-wrap:wrap}.search{width:100%}.content{padding:18px}.grid.kpis{grid-template-columns:1fr}.form-grid,.form-grid.three-cols,.metric-list{grid-template-columns:1fr}.kanban{grid-template-columns:repeat(7,260px)}}
+
+/* Supabase authentication */
+.auth-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0b172c,#18335f);display:grid;place-items:center;padding:24px}
+.auth-card{width:min(430px,100%);background:#fff;border-radius:18px;padding:32px;box-shadow:0 30px 80px rgba(0,0,0,.28)}
+.auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}.auth-brand .brand-mark{background:var(--nav);color:#fff}.auth-brand strong{display:block;letter-spacing:.08em}.auth-brand span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.auth-card h1{margin:4px 0 8px;font-size:30px}.auth-card .eyebrow{margin:0;color:var(--accent);font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.12em}
+.auth-form{display:grid;gap:14px;margin-top:24px}.auth-form label{display:grid;gap:7px;font-size:13px;font-weight:700}.auth-form input{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff}.auth-form button{margin-top:4px;padding:11px 14px}
+.auth-message{min-height:20px;font-size:13px;color:var(--muted)}.bad-text{color:var(--bad)!important}
+button:disabled,input:disabled,select:disabled,textarea:disabled{cursor:not-allowed;opacity:.58}

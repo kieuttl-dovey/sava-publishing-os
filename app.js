@@ -18,7 +18,9 @@
   const TOKEN_KEY = 'savaPublishingOS.githubToken';
   const SEED = clone(window.SAVA_SEED_DB || {});
 
-  let db = loadLocal() || clone(SEED);
+  let db = clone(SEED);
+  let syncChain = Promise.resolve();
+  let isSyncing = false;
   let currentView = location.hash.replace('#','') || 'dashboard';
   let searchTerm = '';
   let githubSha = null;
@@ -47,11 +49,37 @@
     db.meta = db.meta || {};
     db.meta.lastModifiedAt = new Date().toISOString();
     db.audit = db.audit || [];
-    db.audit.unshift({at:new Date().toISOString(),user:db.settings?.currentUser||'Local user',action});
+    db.audit.unshift({at:new Date().toISOString(),user:db.settings?.currentUser||'User',action});
     db.audit = db.audit.slice(0,100);
     localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
-    $('#saveState').textContent='Saved locally';
     render();
+
+    if(!window.SAVA_SUPABASE?.configured){
+      $('#saveState').textContent='Saved locally';
+      return;
+    }
+    if(!window.SAVA_SUPABASE.canEdit()){
+      $('#saveState').textContent='Viewer · read only';
+      toast('Read only: ask an Admin for Editor access');
+      const snap=window.SAVA_SUPABASE.getSnapshot?.();
+      if(snap){db=snap;localStorage.setItem(LOCAL_KEY,JSON.stringify(db));render();}
+      return;
+    }
+
+    $('#saveState').textContent='Saving to Supabase…';
+    const payload=clone(db);
+    syncChain=syncChain.then(async()=>{
+      isSyncing=true;
+      try{
+        await window.SAVA_SUPABASE.syncDb(payload);
+        $('#saveState').textContent=`Synced · ${db.settings?.role||window.SAVA_SUPABASE.getRole()}`;
+      }catch(e){
+        console.error(e);
+        $('#saveState').textContent='Sync error';
+        toast(`Save failed: ${e.message}`);
+        try{db=await window.SAVA_SUPABASE.loadDb();localStorage.setItem(LOCAL_KEY,JSON.stringify(db));render();}catch(_){ }
+      }finally{isSyncing=false;}
+    });
   }
   function toast(msg){
     const el=document.createElement('div'); el.className='toast'; el.textContent=msg; $('#toastRoot').append(el);
@@ -148,6 +176,20 @@
     nav();
     if(!NAV.some(x=>x[0]===currentView)) currentView='dashboard';
     ({dashboard:renderDashboard,partners:renderPartners,deals:renderDeals,market:renderMarket,games:renderGames,sourcing:renderSourcing,operations:renderOperations}[currentView]||renderDashboard)();
+    applyRoleUi();
+  }
+
+  function applyRoleUi(){
+    if(!window.SAVA_SUPABASE?.configured)return;
+    const canEdit=window.SAVA_SUPABASE.canEdit();
+    const canDelete=window.SAVA_SUPABASE.canDelete();
+    document.querySelectorAll('[data-action="quick-add"],[data-action^="add-"]').forEach(el=>el.disabled=!canEdit);
+    document.querySelectorAll('[data-sourcing-stage]').forEach(el=>el.disabled=!canEdit);
+    document.querySelectorAll('[data-delete-partner]').forEach(el=>el.disabled=!canDelete);
+    const imp=$('#importJson');if(imp)imp.disabled=!canDelete;
+    const role=db.settings?.role||window.SAVA_SUPABASE.getRole();
+    const user=db.settings?.currentUser||'';
+    const st=$('#saveState');if(st&&!isSyncing)st.textContent=`${user} · ${role}`;
   }
 
   function renderDashboard(){
@@ -236,7 +278,7 @@
 
   function bindOpeners(){
     document.querySelectorAll('[data-open-partner]').forEach(b=>b.onclick=()=>openPartner(b.dataset.openPartner));
-    document.querySelectorAll('[data-delete-partner]').forEach(b=>b.onclick=()=>{if(confirm('Delete this partner from the local database?')){db.partners=db.partners.filter(x=>x.id!==b.dataset.deletePartner);persist(`Deleted partner ${b.dataset.deletePartner}`);}});
+    document.querySelectorAll('[data-delete-partner]').forEach(b=>b.onclick=()=>{if(window.SAVA_SUPABASE?.configured&&!window.SAVA_SUPABASE.canDelete()){toast('Only Admin can delete records');return;}const id=b.dataset.deletePartner;if(confirm('Delete this partner from the shared database?')){db.partners=db.partners.filter(x=>x.id!==id);db.partnerRisks=(db.partnerRisks||[]).filter(x=>x.partnerId!==id);(db.deals||[]).forEach(x=>{if(x.partnerId===id)x.partnerId=null;});(db.sourcing||[]).forEach(x=>{if(x.partnerId===id)x.partnerId=null;});(db.projects||[]).forEach(x=>{if(x.partnerId===id)x.partnerId=null;});persist(`Deleted partner ${id}`);}});
     document.querySelectorAll('[data-open-deal]').forEach(b=>b.onclick=()=>openDeal(b.dataset.openDeal));
     document.querySelectorAll('[data-open-market]').forEach(b=>b.onclick=()=>openMarket(b.dataset.openMarket));
     document.querySelectorAll('[data-open-publisher]').forEach(b=>b.onclick=()=>openPublisher(b.dataset.openPublisher));
@@ -246,8 +288,10 @@
   }
 
   function modal(title,body,onSave,{wide=false,saveText='Save'}={}){
-    modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal ${wide?'wide':''}"><div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-close>×</button></div><div class="modal-body">${body}</div><div class="modal-foot"><button class="ghost" data-close>Cancel</button><button class="primary" data-save>${esc(saveText)}</button></div></div></div>`;
+    const readOnly=window.SAVA_SUPABASE?.configured && !window.SAVA_SUPABASE.canEdit();
+    modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal ${wide?'wide':''}"><div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-close>×</button></div><div class="modal-body">${readOnly?'<div class="notice">Viewer mode · read only</div>':''}${body}</div><div class="modal-foot"><button class="ghost" data-close>${readOnly?'Close':'Cancel'}</button>${readOnly?'':`<button class="primary" data-save>${esc(saveText)}</button>`}</div></div></div>`;
     modalRoot.querySelectorAll('[data-close]').forEach(x=>x.onclick=()=>modalRoot.innerHTML='');
+    if(readOnly){modalRoot.querySelectorAll('input,select,textarea').forEach(x=>x.disabled=true);return;}
     modalRoot.querySelector('[data-save]').onclick=()=>onSave(modalRoot.querySelector('.modal'));
   }
   function fText(name,label,value='',cls='',type='text'){return `<div class="field ${cls}"><label>${esc(label)}</label><input name="${name}" type="${type}" value="${esc(value??'')}"></div>`;}
@@ -383,25 +427,49 @@
   }
 
   function exportJson(){const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`sava-publishing-os-${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
-  function importJson(file){const fr=new FileReader();fr.onload=()=>{try{const x=JSON.parse(fr.result);if(!x.partners||!x.games)throw new Error('Not a Publishing OS database');db=x;localStorage.setItem(LOCAL_KEY,JSON.stringify(db));render();toast('Imported JSON database');}catch(e){alert(`Import failed: ${e.message}`);}};fr.readAsText(file);}
+  function importJson(file){if(window.SAVA_SUPABASE?.configured&&!window.SAVA_SUPABASE.canDelete()){alert('Only Admin can import a full database.');return;}const fr=new FileReader();fr.onload=()=>{try{const x=JSON.parse(fr.result);if(!x.partners||!x.games)throw new Error('Not a Publishing OS database');db=x;persist('Imported JSON database');toast('Imported database and queued cloud sync');}catch(e){alert(`Import failed: ${e.message}`);}};fr.readAsText(file);}
 
   document.addEventListener('click',e=>{
     const a=e.target.closest('[data-action]');if(!a)return;
     const act=a.dataset.action;
-    if(act==='open-sync')openSync(); else if(act==='export-json')exportJson(); else if(act==='quick-add'){({partners:()=>openPartner(),deals:()=>openDeal(),market:()=>openPublisher(),games:()=>openGame(),sourcing:()=>openSourcing(),operations:()=>openProject()}[currentView]||(()=>openSourcing()))();}
+    if(act==='account')window.SAVA_SUPABASE?.accountAction?.(); else if(act==='refresh-cloud')refreshCloud(); else if(act==='open-sync')openSync(); else if(act==='export-json')exportJson(); else if(act==='quick-add'){({partners:()=>openPartner(),deals:()=>openDeal(),market:()=>openPublisher(),games:()=>openGame(),sourcing:()=>openSourcing(),operations:()=>openProject()}[currentView]||(()=>openSourcing()))();}
     else if(act==='add-partner')openPartner();else if(act==='add-risk')addRisk();else if(act==='add-deal')openDeal();else if(act==='add-publisher')openPublisher();else if(act==='add-game')openGame();else if(act==='add-sourcing')openSourcing();else if(act==='add-project')openProject();
   });
   $('#globalSearch').addEventListener('input',e=>{searchTerm=e.target.value;render();});
   $('#importJson').addEventListener('change',e=>{if(e.target.files[0])importJson(e.target.files[0]);e.target.value='';});
   window.addEventListener('hashchange',()=>{currentView=location.hash.replace('#','')||'dashboard';render();});
 
-  async function boot(){
-    if(!loadLocal()){
-      try{
-        const r=await fetch('data/db.json',{cache:'no-store'});
-        if(r.ok){ db=await r.json(); localStorage.setItem(LOCAL_KEY,JSON.stringify(db)); }
-      }catch(_){ /* file:// or offline fallback uses packaged seed */ }
+  async function refreshCloud(silent=false){
+    if(!window.SAVA_SUPABASE?.configured)return;
+    if(isSyncing){if(!silent)toast('A save is still syncing');return;}
+    try{
+      if(!silent)$('#saveState').textContent='Refreshing…';
+      db=await window.SAVA_SUPABASE.loadDb();
+      localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
+      render();
+      if(!silent)toast('Latest team data loaded');
+    }catch(e){
+      console.error(e);
+      $('#saveState').textContent='Refresh error';
+      if(!silent)toast(`Refresh failed: ${e.message}`);
     }
+  }
+
+  async function boot(){
+    try{
+      if(window.SAVA_SUPABASE?.configured){
+        $('#saveState').textContent='Connecting…';
+        db=await window.SAVA_SUPABASE.init();
+        localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
+        render();
+        setInterval(()=>{if(document.visibilityState==='visible'&&!modalRoot.innerHTML&&!isSyncing)refreshCloud(true);},60000);
+        return;
+      }
+    }catch(e){
+      console.error(e);
+      alert(`Supabase connection failed: ${e.message}`);
+    }
+    db=loadLocal()||clone(SEED);
     render();
   }
 

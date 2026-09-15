@@ -1,58 +1,35 @@
 # Data model
 
-The app stores one JSON database in `data/db.json`.
+Supabase Postgres is the shared source of truth.
 
-## Main collections
-
-| Collection | Purpose | Main relationships |
+| App collection | Supabase table | Purpose |
 |---|---|---|
-| `partners` | Partner master, evidence, hard gates, scores | Referenced by deals and sourcing |
-| `partnerRisks` | Partner risk log | `partnerId` → `partners.id` |
-| `deals` | Commercial/deal terms and negotiation status | `partnerId`, optional `gameId` |
-| `market` | Market/UA benchmark by mechanic | Used as reference for game selection |
-| `publisherLandscape` | Editable Publisher Landscape | Independent benchmark registry |
-| `games` | Game candidate intake + selection evidence | Can be referenced by deals, sourcing, projects |
-| `sourcing` | Funnel records | Optional `partnerId` / `gameId` links |
-| `projects` | Publishing operation after deal | Optional `gameId` / `partnerId` links |
-| `audit` | Recent local/shared actions | Stores actor, time, action text |
+| `partners` | `partners` | Partner master, evidence, hard gates, scores |
+| `partnerRisks` | `partner_risks` | Partner risk log |
+| `deals` | `deals` | Commercial/deal terms and negotiation status |
+| `market` | `market_benchmarks` | Market/UA benchmark by mechanic |
+| `publisherLandscape` | `publisher_landscape` | Publisher benchmark registry |
+| `games` | `games` | Game candidate intake + selection evidence |
+| `sourcing` | `sourcing` | Sourcing funnel records |
+| `projects` | `projects` | Publishing operation after deal |
+| `audit` | `audit_logs` | Database insert/update/delete history |
+| `settings/meta` | `app_config` | Application configuration |
+| `playbook` | `playbook_configs` | Decision/gate framework configuration |
 
-## IDs
+## Relationships
 
-IDs are human-readable and editable. Keep them stable after a record is referenced elsewhere.
+- `partner_risks.partner_id` → `partners.id`
+- `deals.partner_id` → `partners.id`
+- `deals.game_id` → `games.id`
+- `sourcing.partner_id` → `partners.id`
+- `sourcing.game_id` → `games.id`
+- `projects.partner_id` → `partners.id`
+- `projects.game_id` → `games.id`
 
-- Partner: `P001`, `P002`, ...
-- Game candidate: source IDs such as `PUB-001`
-- Deal: `DEAL-001`, ...
-- Sourcing record: `SRC-001`, ...
-- Project: `PRJ-001`, ...
+## Roles
 
-## Derived fields
+User role is stored in `profiles.role`: `admin`, `editor`, or `viewer`.
 
-Scores and decisions shown in the UI are calculated at render time from source inputs. The app does not require users to manually type total scores.
+## Derived logic
 
-### Partner Selection
-
-- Hard Gate: fail / pending / pass based on six gate checks.
-- Production Composite: average of Production Capacity, Development Cadence, Milestone Reliability, and LiveOps Scalability when complete.
-- Evidence Coverage: eight evidence groups.
-- Minimum Evidence Gate: requires passed Hard Gate plus required evidence statuses.
-- Partner Fit Total: normalized weighted score.
-- Classification and Final Conclusion are derived from the above.
-
-### Game Selection
-
-- Hard Gate combines Legal/IP, Build, Tracking, Store, Commercial Terms, and Rights.
-- Pre-Scan combines Market, Publishing Readiness, Deal Economics, and SAVA Publishing Fit.
-- Post-Test / Final Score adds Product Evidence.
-- Recommendation follows hard gate, completeness, stage, and the source score thresholds.
-
-### Publishing Operation
-
-The current gate evaluator supports:
-
-- Product Test
-- Monetization Test
-- Expansion
-- Scale
-
-and applies the source workbook's Hybrid IAP / Hybrid IAA thresholds.
+Partner/Game/Publishing scores are calculated by the frontend from the structured source fields. The database stores the full record in each table's `data` JSONB column plus selected top-level columns for indexing and relationships.

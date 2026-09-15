@@ -1,3 +1,15 @@
+# SAVA Publishing OS v0.12 — Selective Market Watch & Edit Rules
+
+## v0.12 changes — logic thị trường rõ hơn cho Sếp và BD
+
+- Thêm định hướng **Theo dõi chọn lọc** cho market đang suy giảm nhưng **Khả năng kiếm tiền >= 60/100**. Đây là nhóm market có thể trưởng thành/niche nhưng vẫn monetize tốt; không ưu tiên tìm kiếm đại trà, chỉ xem xét game/partner chất lượng cao hoặc có thesis rõ.
+- Opportunity Map có nhóm riêng **Theo dõi chọn lọc** và dùng cùng rule với cột Định hướng.
+- Trong Edit của từng mechanic, thêm hướng dẫn chi tiết và kết quả hiện tại cho 3 lớp logic:
+  1. **Xu hướng 3M**: rule đầy đủ theo DL Growth 3M x Revenue Growth 3M, gồm Bứt phá, Tăng mạnh từ nền thấp, Tăng trưởng tốt, Ổn định, Mở rộng user, Tăng trưởng doanh thu, các case trái chiều và suy giảm.
+  2. **Khả năng kiếm tiền /100**: percentile của RPD trong dataset; >=80 Rất tốt, 60–79.9 Tốt, 40–59.9 Trung bình, <40 Thấp.
+  3. **Định hướng SAVA**: Bổ sung dữ liệu / Theo dõi chọn lọc / Ưu tiên tìm kiếm game-đối tác / Ưu tiên kiểm thử / Theo dõi thêm / Chưa ưu tiên, kèm điều kiện và ý nghĩa hành động.
+- Edit view nhấn mạnh các kết luận trên là **tự tính**, BD chỉ cần nhập dữ liệu benchmark và Phù hợp SAVA /100.
+
 # SAVA Publishing OS v0.11 — Executive Market Direction
 
 ## v0.11 changes — định hướng thị trường dễ hiểu cho Sếp

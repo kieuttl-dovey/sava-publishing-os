@@ -166,3 +166,13 @@ body{background:linear-gradient(180deg,#F7FAFF 0%,#F3F7FF 100%)}
 @media(max-width:760px){.market-opportunity-map{grid-template-columns:1fr}.market-score{grid-template-columns:32px 70px}.market-exec-table{min-width:1080px}}
 
 .market-chart-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 10px;margin:4px 12px 10px;padding:8px 10px;border-radius:9px;background:#F8FAFF;border:1px solid #E3E9F4;color:#59657E;font-size:9.5px;line-height:1.35}.market-chart-guide b{color:#24314F}@media(max-width:900px){.market-chart-guide{grid-template-columns:1fr}}
+
+/* v0.12 · Market selective watch + explicit edit rules */
+.market-direction.selective{color:#006E85;background:#E3F8FC;border:1px solid #BCEBF4}
+.market-opportunity-map{grid-template-columns:repeat(5,minmax(0,1fr))}
+.market-opp-card.selective{border-color:#BCEBF4;background:#F2FBFD}
+.market-edit-guide{display:grid;gap:10px;margin:12px 0 18px}.market-guide-current{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.market-guide-current>div{border:1px solid #DCE4F0;background:#F8FAFE;border-radius:10px;padding:10px}.market-guide-current span,.market-guide-current small{display:block;color:var(--slate);font-size:10px}.market-guide-current b{display:block;margin:4px 0 2px;font-family:"Space Grotesk",sans-serif;font-size:13px;color:var(--void)}.market-edit-guide details{border:1px solid #DCE4F0;border-radius:10px;background:#fff;overflow:hidden}.market-edit-guide summary{cursor:pointer;padding:11px 12px;font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:12px;color:var(--void);background:#F7F9FD}.market-rule-body{padding:11px 12px}.market-rule-body p{margin:0 0 10px;line-height:1.55}.market-rule-table{width:100%;border-collapse:collapse;font-size:10.5px}.market-rule-table th{background:#F1F5FF;color:#33405C;text-align:left;padding:7px 8px;border-bottom:1px solid #DCE4F0}.market-rule-table td{padding:7px 8px;border-bottom:1px solid #E8EDF5;vertical-align:top}.market-rule-table tr:last-child td{border-bottom:0}.market-rule-bands{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}.market-rule-bands span{padding:6px 8px;border-radius:999px;background:#F1F5FF;color:#33405C;font-size:10px;border:1px solid #DCE4F0}
+@media(max-width:1500px){.market-opportunity-map{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1100px){.market-guide-current{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.market-opportunity-map,.market-guide-current{grid-template-columns:1fr}.market-rule-table{font-size:9.5px}}
+.market-dot.selective circle{fill:#00A6C7;fill-opacity:.72}

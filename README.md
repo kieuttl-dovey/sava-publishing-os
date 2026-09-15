@@ -1,6 +1,16 @@
-# SAVA Publishing OS v0.7 — Deal Making Playbook
+# SAVA Publishing OS v0.8 — Deal Making + BD Guidance
 
 Internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
+
+## v0.8 changes — RS policy + hướng dẫn BD
+
+- Deal Making now exposes the **SAVA / Partner Revenue Share matrix** directly: 50/50 pre-Soft Launch without support, 60/40 at Soft Launch+ without support, 70/30 for supported deals, and ~80/20 target for material support.
+- UA tiers are shown next to the RS matrix: T1 70/30, T2 75/25, T3/T4 80/20, with T4 requiring management review.
+- The **no-free-concession / Give-Get** principle is highlighted next to the RS policy.
+- Deal Edit now contains collapsible **Hướng dẫn BD** blocks sourced from the workbook guidance in `02_DỮ_LIỆU_DEAL`, `03_ĐÀM_PHÁN`, and `04_MỐC_PHÊ_DUYỆT`.
+- Guidance includes what to enter, how to interpret each field, examples, the 1–5 scoring quick guide, negotiation anchor/acceptable/stop definitions, term-by-term tips, milestone rules, and final approval checks.
+- Color legend in the edit view mirrors the workbook meaning: blue = BD input, green = linked data, purple = derived/check, orange = review.
+
 
 ## v0.7 changes — Deal Making
 

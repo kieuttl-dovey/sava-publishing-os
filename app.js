@@ -2,13 +2,14 @@
   'use strict';
 
   const NAV = [
-    ['dashboard','Overview','Dashboard'],
+    ['dashboard','Tổng quan','Tổng quan'],
     ['partners','1','Partner Selection'],
     ['deals','2','Deal Making'],
     ['market','3','Market Intelligence'],
     ['games','4','Game Selection'],
     ['sourcing','5','Sourcing'],
-    ['operations','6','Publishing Operation']
+    ['operations','6','Publishing Operation'],
+    ['sources','Nguồn','Tài liệu nguồn']
   ];
   const STAGES = ['Lead','Qualified','Evaluation','Deal','Test','Launch','Scale'];
   const SOURCING_SLA = {Lead:14, Qualified:10, Evaluation:14, Deal:30, Test:21, Launch:30, Scale:999};
@@ -29,6 +30,14 @@
     ['Portfolio_Strategic_Fit_1_5','Phù hợp Portfolio / chiến lược'],
     ['Internal_Operator_Availability_1_5','Nguồn lực vận hành nội bộ']
   ];
+  const SOURCE_WORKBOOKS = [
+    {id:'game-market',module:'Market Intelligence + Game Selection',name:'SAVA_Mobile_Game_Decision_Pub(3)_UPDATED_SCORES_SAFE (3).xlsm',storagePath:'01_game_market_selection.xlsm',type:'XLSM',sheets:53,formulas:8024,owner:'Market Intelligence / Game Selection',note:'Nguồn Market economics, UA benchmark, Publishing Intake, SAVA Publishing Fit, Pre-Scan/Post-Test và Dashboard.'},
+    {id:'partner',module:'Partner Selection',name:'Publishing_Partner_Selection_Playbook (1).xlsx',storagePath:'02_partner_selection.xlsx',type:'XLSX',sheets:5,formulas:2441,owner:'Partner Selection',note:'Nguồn Partner profile, Hard Gate, Evidence, Partner Fit, Risk và Decision.'},
+    {id:'deal',module:'Deal Making',name:'SAVA_Deal_Making_Playbook_Thuan_Viet_v14_Huong_Dan_03_04(1).xlsx',storagePath:'03_deal_making.xlsx',type:'XLSX',sheets:8,formulas:7440,owner:'Deal Making',note:'Nguồn Revenue Share, MG/đầu tư, UA commitment, negotiation, milestone, exit và approval.'},
+    {id:'sourcing',module:'Sourcing',name:'SAVA_Sourcing_Funnel_KPI_Thuan_Viet(1).xlsx',storagePath:'04_sourcing_funnel.xlsx',type:'XLSX',sheets:9,formulas:15478,owner:'Sourcing',note:'Nguồn Lead → Qualified → Evaluation → Deal → Test → Launch → Scale, KPI Funnel và mapping tham chiếu các module.'},
+    {id:'operation',module:'Publishing Operation',name:'Publishing_Launching_1 (1).xlsx',storagePath:'05_publishing_operation.xlsx',type:'XLSX',sheets:8,formulas:0,owner:'Publishing Operation',note:'Nguồn SOP sau Deal, Hybrid IAP/IAA, KPI reference và Publishing Projects.'}
+  ];
+  let sourceStorageState = {loading:false,loaded:false,files:{},error:''};
   const LOCAL_KEY = 'savaPublishingOS.db.v1';
   const TOKEN_KEY = 'savaPublishingOS.githubToken';
   const SEED = clone(window.SAVA_SEED_DB || {});
@@ -524,7 +533,7 @@
   function render(){
     nav();
     if(!NAV.some(x=>x[0]===currentView)) currentView='dashboard';
-    ({dashboard:renderDashboard,partners:renderPartners,deals:renderDeals,market:renderMarket,games:renderGames,sourcing:renderSourcing,operations:renderOperations}[currentView]||renderDashboard)();
+    ({dashboard:renderDashboard,partners:renderPartners,deals:renderDeals,market:renderMarket,games:renderGames,sourcing:renderSourcing,operations:renderOperations,sources:renderSources}[currentView]||renderDashboard)();
     applyRoleUi();
   }
 
@@ -535,32 +544,111 @@
     document.querySelectorAll('[data-action="quick-add"],[data-action^="add-"]').forEach(el=>el.disabled=!canEdit);
     document.querySelectorAll('[data-sourcing-stage]').forEach(el=>el.disabled=!canEdit);
     document.querySelectorAll('[data-delete-partner]').forEach(el=>el.disabled=!canDelete);
-    const imp=$('#importJson');if(imp)imp.disabled=!canDelete;
+    const quick=document.querySelector('[data-action="quick-add"]');if(quick)quick.style.display=canEdit?'':'none';
+    const imp=$('#importJson');if(imp){imp.disabled=!canDelete;const holder=imp.closest('.file-button');if(holder)holder.style.display=canDelete?'':'none';}
     const role=db.settings?.role||window.SAVA_SUPABASE.getRole();
     const user=db.settings?.currentUser||'';
     const st=$('#saveState');if(st&&!isSyncing)st.textContent=`${user} · ${role}`;
   }
 
   function renderDashboard(){
-    setHeader('Dashboard','Portfolio & decision overview');
-    const partnerStats=db.partners.map(p=>partnerDerived(p));
-    const gameStats=db.games.map(g=>gameDerived(g));
-    const openHigh=(db.partnerRisks||[]).filter(r=>['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score)) && r.status!=='Đã đóng').length;
-    const opsActive=(db.projects||[]).filter(p=>!['Đã đóng','Stopped'].includes(p.deploymentStatus)).length;
-    const partnerRows=db.partners.filter(p=>includesSearch(p.id,profile(p,'Tên Partner / Studio'),profile(p,'Genre chính'))).map(p=>{const d=partnerDerived(p);return `<tr><td><button class="linkish" data-open-partner="${p.id}">${p.id}</button></td><td><b>${esc(profile(p,'Tên Partner / Studio'))}</b><div class="small muted">${esc(profile(p,'Genre chính')||'')}</div></td><td>${badge(d.hard)}</td><td>${scoreBar(d.fit)}</td><td>${badge(d.final)}</td><td>${esc(p.decision?.nextAction||p.scorecard?.nextAction||'—')}</td></tr>`;});
-    const stageCounts=Object.fromEntries(STAGES.map(s=>[s,(db.sourcing||[]).filter(x=>x.stage===s).length]));
-    const funnel=STAGES.map((s,i)=>`<tr><td>${s}</td><td class="num"><b>${stageCounts[s]}</b></td><td class="num">${i===0?'—':stageCounts[STAGES[i-1]]?((stageCounts[s]/stageCounts[STAGES[i-1]])*100).toFixed(0)+'%':'—'}</td></tr>`);
-    const alerts=[];
-    db.partners.forEach(p=>{const d=partnerDerived(p);if(d.hard!=='ĐẠT')alerts.push(`${p.id} · ${profile(p,'Tên Partner / Studio')}: Hard Gate ${d.hard}`);});
-    db.games.forEach(g=>{const d=gameDerived(g);if(d.hard!=='PASS')alerts.push(`${g.id} · ${intake(g,'Game_Title')}: ${d.recommendation}`);});
-    content.innerHTML=`<div class="grid kpis">${kpi('Partners',db.partners.length,`${partnerStats.filter(x=>x.final==='Ưu tiên'||x.final==='Đạt').length} qualified by current logic`)}${kpi('Games',db.games.length,`${gameStats.filter(x=>/PRODUCT TEST|GREENLIGHT/.test(x.recommendation)).length} proceed signals`)}${kpi('Open high risks',openHigh,'Partner risk log')}${kpi('Active projects',opsActive,'Publishing operation portfolio')}</div>
-      <div class="split">
-        ${panel('Partner decision board',table(['ID','Partner','Hard Gate','Partner Fit','Conclusion','Next action'],partnerRows),'Score does not override Hard Gate.')}
-        ${panel('Sourcing funnel',table(['Stage','Count','Step conversion'],funnel),'Lead → Qualified → Evaluation → Deal → Test → Launch → Scale')}
+    setHeader('Tổng quan điều hành','SAVA Publishing · Executive Overview');
+
+    const partners=(db.partners||[]).map(p=>({p,d:partnerDerived(p)}));
+    const games=(db.games||[]).map(g=>({g,d:gameDerived(g)}));
+    const deals=(db.deals||[]).map(dealInitialDefaults).map(d=>({d,x:dealDerived(d)}));
+    const sourcing=db.sourcing||[];
+    const projects=db.projects||[];
+    const market=marketAnalytics(db.market||[]);
+
+    const marketP1=market.filter(x=>x.direction?.key==='priority');
+    const marketP2=market.filter(x=>x.direction?.key==='test');
+    const topMarket=[...marketP1,...marketP2].sort((a,b)=>(b.score??-1)-(a.score??-1))[0]||[...market].filter(x=>x.score!==null).sort((a,b)=>b.score-a.score)[0];
+
+    const activeSourcing=sourcing.filter(x=>sourcingStatus(x)==='Đang xử lý');
+    const stuck=activeSourcing.filter(x=>sourcingPipelineAlert(x)==='STUCK');
+    const overdue=activeSourcing.filter(sourcingOverdue);
+    const qualified=sourcing.filter(x=>sourcingQualified(x)==='Có').length;
+    const reached=Object.fromEntries(STAGES.map(st=>[st,sourcing.filter(x=>sourcingReached(x,st)).length]));
+
+    const readyPartners=partners.filter(({d})=>d.hard==='ĐẠT'&&d.fit!==null&&d.fit>=75);
+    const highPartnerRisks=(db.partnerRisks||[]).filter(r=>r.status!=='Đã đóng'&&['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score)));
+    const partnerPending=partners.filter(({d})=>d.hard!=='ĐẠT'||d.minimumGate!=='ĐẠT');
+
+    const gameProceed=games.filter(({d})=>/^Tiếp tục$/.test(d.selectionDecision));
+    const gameConditional=games.filter(({d})=>/Tiếp tục có điều kiện/.test(d.selectionDecision));
+    const gameGateOpen=games.filter(({d})=>d.hard!=='PASS');
+
+    const activeDeals=deals.filter(({d})=>!['Tạm dừng','Đã đóng'].includes(d.status));
+    const highRiskDeals=deals.filter(({x})=>x.riskScore!==null&&x.riskScore>=50);
+    const dealReady=deals.filter(({x})=>/TIẾP TỤC/.test(String(x.decision||'').toUpperCase()));
+
+    const opStageCounts=OPERATION_ROADMAP.map((_,i)=>projects.filter(p=>operationStageIndex(p)===i).length);
+    const scaleProjects=opStageCounts[4]||0;
+    const opAttention=projects.filter(p=>/FAIL|STOP|HOLD|TEST THÊM/i.test(String(p.gateReview?.result||p.latestDecision||'')));
+
+    const attentionCount=highPartnerRisks.length+stuck.length+overdue.length+gameGateOpen.length+highRiskDeals.length+opAttention.length;
+
+    const metric=(label,value,sub,tone='blue')=>`<div class="exec-metric ${tone}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub||'')}</small></div>`;
+    const navLink=(label,view)=>`<button class="exec-link" data-dash-nav="${view}">${esc(label)} →</button>`;
+
+    const focus=[];
+    highPartnerRisks.slice(0,3).forEach(r=>focus.push({tone:'bad',title:`Risk Partner · ${r.partnerId}`,detail:r.risk||r.name||`${r.level||riskLevel(r.score)} risk`,view:'partners'}));
+    if(stuck.length)focus.push({tone:'bad',title:`${stuck.length} Lead đang STUCK`,detail:'Vượt SLA ở giai đoạn hiện tại; cần xử lý bottleneck.',view:'sourcing'});
+    if(overdue.length)focus.push({tone:'warn',title:`${overdue.length} Lead quá hạn hành động`,detail:'Next action đã quá deadline.',view:'sourcing'});
+    if(gameGateOpen.length)focus.push({tone:'warn',title:`${gameGateOpen.length} Game còn Hard Gate mở`,detail:'Chưa nên ra quyết định đi tiếp trước khi đóng Gate.',view:'games'});
+    if(highRiskDeals.length)focus.push({tone:'warn',title:`${highRiskDeals.length} Deal rủi ro cao`,detail:'Risk Score ≥50/100; cần kiểm tra protection / capital / RS.',view:'deals'});
+    if(opAttention.length)focus.push({tone:'warn',title:`${opAttention.length} Project cần review Gate`,detail:'Có HOLD / TEST THÊM / FAIL / STOP trong Publishing Operation.',view:'operations'});
+    if(!focus.length)focus.push({tone:'good',title:'Không có blocker cấp cao',detail:'Hiện chưa có cảnh báo ưu tiên cao trong dữ liệu đang đồng bộ.',view:'dashboard'});
+
+    const marketCards=[...marketP1,...marketP2].sort((a,b)=>(b.score??-1)-(a.score??-1)).slice(0,5).map(x=>`<button class="exec-list-row" data-open-market="${esc(x.m.Mechanic_ID)}"><div><b>${esc(x.m.Mechanic)}</b><small>${esc(x.direction.label)} · ${esc(x.trend.label)}</small></div><strong>${x.score===null?'—':fmt(x.score,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có market P1/P2 đủ dữ liệu.</div>';
+
+    const topPartners=[...partners].filter(({d})=>d.fit!==null).sort((a,b)=>(b.d.fit??-1)-(a.d.fit??-1)).slice(0,5).map(({p,d})=>`<button class="exec-list-row" data-open-partner="${p.id}"><div><b>${esc(profile(p,'Tên Partner / Studio')||p.id)}</b><small>${esc(d.final)} · ${esc(profile(p,'Genre chính')||'—')}</small></div><strong>${fmt(d.fit,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có Partner đủ dữ liệu chấm điểm.</div>';
+
+    const topGames=[...games].filter(({d})=>d.prescan!==null).sort((a,b)=>(b.d.prescan??-1)-(a.d.prescan??-1)).slice(0,5).map(({g,d})=>`<button class="exec-list-row" data-open-game="${g.id}"><div><b>${esc(intake(g,'Game_Title')||g.id)}</b><small>${esc(d.selectionDecision)} · ${esc(intake(g,'Mechanic')||'—')}</small></div><strong>${fmt(d.prescan,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có Game đủ dữ liệu Pre-Scan.</div>';
+
+    const flow=STAGES.map((st,i)=>`<div class="exec-flow-step"><span>${i+1}</span><b>${st}</b><strong>${reached[st]||0}</strong>${i<STAGES.length-1?'<i>→</i>':''}</div>`).join('');
+    const opRoad=OPERATION_ROADMAP.map((s,i)=>`<div class="exec-op-step op-${i}"><span>${esc(s.code)}</span><b>${esc(s.title)}</b><strong>${opStageCounts[i]||0}</strong></div>`).join('');
+
+    const summaryParts=[];
+    if(marketP1.length)summaryParts.push(`${marketP1.length} market P1 cần chủ động`);
+    if(gameProceed.length+gameConditional.length)summaryParts.push(`${gameProceed.length+gameConditional.length} game có tín hiệu đi tiếp`);
+    if(activeDeals.length)summaryParts.push(`${activeDeals.length} deal đang theo dõi`);
+    if(projects.length)summaryParts.push(`${projects.length} project sau Deal`);
+    const executiveSummary=summaryParts.length?summaryParts.join(' · '):'Hệ thống đang chờ thêm dữ liệu vận hành để tạo executive summary.';
+
+    content.innerHTML=`<div class="exec-dashboard">
+      <section class="exec-hero"><div class="exec-hero-copy"><div class="exec-hero-kicker">SAVA PUBLISHING OS</div><h2>Executive Overview</h2><p>${esc(executiveSummary)}</p><div class="exec-hero-meta"><span><b>${attentionCount}</b> điểm cần lưu ý</span><span><b>${marketP1.length+marketP2.length}</b> market P1/P2</span><span><b>${scaleProjects}</b> project ở Scale</span></div></div><img src="assets/sava-logo.png" alt="SAVA" class="exec-hero-logo"></section>
+
+      <div class="exec-metric-grid">
+        ${metric('Định hướng thị trường',`${marketP1.length} P1 · ${marketP2.length} P2`,topMarket?`${topMarket.m.Mechanic} · ${fmt(topMarket.score,1)}/100`:'Chưa đủ dữ liệu','cyan')}
+        ${metric('Sourcing',activeSourcing.length,`${qualified} Qualified · ${stuck.length} STUCK`,'blue')}
+        ${metric('Partner sẵn sàng',readyPartners.length,`${highPartnerRisks.length} high risk đang mở`,'purple')}
+        ${metric('Game có thể đi tiếp',gameProceed.length+gameConditional.length,`${gameGateOpen.length} Hard Gate cần xử lý`,'cyan')}
+        ${metric('Deal đang theo dõi',activeDeals.length,`${dealReady.length} có thể tiếp tục · ${highRiskDeals.length} risk cao`,'blue')}
+        ${metric('Publishing Operation',projects.length,`${scaleProjects} Scale · ${opAttention.length} cần review`,'purple')}
       </div>
-      ${panel('Attention needed',alerts.length?`<div class="grid">${alerts.slice(0,12).map(x=>`<div class="notice warn">${esc(x)}</div>`).join('')}</div>`:'<div class="notice good">No blocking items in the current local dataset.</div>','Hard Gate, pending gates and portfolio blockers')}
-      ${panel('Recent activity',(db.audit||[]).slice(0,12).map(a=>`<div class="small" style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${esc(a.user)}</b> · ${esc(a.action)} <span class="muted">${esc(a.at)}</span></div>`).join('')||'<div class="empty">No local activity yet.</div>')}`;
+
+      <div class="exec-layout-main">
+        <section class="panel exec-attention"><div class="panel-head"><div><h2>Việc Sếp cần chú ý</h2><p>Ưu tiên blocker, risk và quyết định cần can thiệp.</p></div><span class="exec-count">${attentionCount}</span></div><div class="panel-body exec-focus-list">${focus.slice(0,8).map(x=>`<button class="exec-focus ${x.tone}" data-dash-nav="${x.view}"><span></span><div><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div><i>→</i></button>`).join('')}</div></section>
+        <section class="panel"><div class="panel-head"><div><h2>Cơ hội thị trường ưu tiên</h2><p>P1/P2 theo Market Intelligence hiện tại.</p></div>${navLink('Xem Market','market')}</div><div class="panel-body exec-list">${marketCards}</div></section>
+      </div>
+
+      ${panel('Funnel Publishing',`<div class="exec-flow">${flow}</div><div class="exec-flow-note"><b>Lead → Scale:</b> ${sourcing.length?pct((reached.Scale||0)/sourcing.length,2):'—'} · <b>Deal → Test:</b> ${reached.Deal?pct((reached.Test||0)/reached.Deal,1):'—'} · <b>Cần xử lý:</b> ${stuck.length+overdue.length}</div>`,'Một flow xuyên suốt; stage lấy từ Sourcing và dùng chung cho các module downstream.',navLink('Xem Sourcing','sourcing'))}
+
+      <div class="exec-three-col">
+        ${panel('Partner nổi bật',`<div class="exec-list">${topPartners}</div>`,'Xếp theo Partner Fit; Hard Gate vẫn override score.',navLink('Xem Partner','partners'))}
+        ${panel('Game nổi bật',`<div class="exec-list">${topGames}</div>`,'Xếp theo Pre-Scan trước Test.',navLink('Xem Game','games'))}
+        ${panel('Deal & rủi ro',`<div class="exec-deal-summary"><div><span>Active Deal</span><b>${activeDeals.length}</b></div><div><span>Risk ≥50</span><b class="${highRiskDeals.length?'bad-text':''}">${highRiskDeals.length}</b></div><div><span>Có thể tiếp tục</span><b>${dealReady.length}</b></div></div><div class="exec-mini-note">Deal logic ưu tiên Hard Gate → RS → Risk/Protection → Capital → Readiness.</div>`,'Tóm tắt portfolio Deal.',navLink('Xem Deal','deals'))}
+      </div>
+
+      ${panel('Publishing Roadmap',`<div class="exec-op-roadmap">${opRoad}</div><div class="exec-mini-note"><b>${projects.length}</b> project sau Deal · <b>${opAttention.length}</b> project đang có HOLD / TEST THÊM / FAIL / STOP.</div>`,'P0 → Product Test → Monetization → Expansion → Scale.',navLink('Xem Operation','operations'))}
+
+      ${panel('Hoạt động gần đây',(db.audit||[]).slice(0,8).map(a=>`<div class="exec-activity"><b>${esc(a.user)}</b><span>${esc(a.action)}</span><small>${esc(a.at)}</small></div>`).join('')||'<div class="empty">Chưa có hoạt động gần đây.</div>','Audit trail để theo dõi thay đổi quan trọng.')}
+    </div>`;
+
     bindOpeners();
+    document.querySelectorAll('[data-dash-nav]').forEach(b=>b.onclick=()=>{const v=b.dataset.dashNav;if(v&&v!=='dashboard'){currentView=v;location.hash=v;render();}});
   }
 
   function renderPartners(){
@@ -975,6 +1063,37 @@
     return `<div class="operation-roadmap">${OPERATION_ROADMAP.map((s,i)=>`<div class="operation-roadmap-stage operation-roadmap-${i}"><div class="operation-stage-head"><span class="operation-stage-code">${esc(s.code)}</span><div><b>${esc(s.title)}</b><small>${esc(s.vn)}</small></div></div><p class="operation-stage-objective">${esc(s.objective)}</p><div class="operation-stage-summary">${esc(s.summary)}</div><div class="operation-stage-rule"><span>Điều kiện chung</span><p>${esc(s.common)}</p></div><div class="operation-model-rules"><div><em>IAP</em><p>${esc(s.iap)}</p></div><div><em>IAA</em><p>${esc(s.iaa)}</p></div></div><div class="operation-stage-exit">${esc(s.pass)}</div></div>${i<OPERATION_ROADMAP.length-1?'<div class="operation-roadmap-arrow">→</div>':''}`).join('')}</div>`;
   }
   function operationDecisionLegend(){return `<div class="operation-legend"><div><span class="dot pass"></span><b>PASS</b><small>Qua Gate → phase tiếp theo</small></div><div><span class="dot test"></span><b>TEST THÊM</b><small>Giữ Gate, fix theo hypothesis rồi retest</small></div><div><span class="dot fail"></span><b>FAIL / STOP</b><small>Dừng hoặc rollback / post-mortem</small></div><div><span class="dot hold"></span><b>HOLD</b><small>Data/P0/cohort chưa hợp lệ; chưa kết luận</small></div></div>`;}
+
+  function sourceStatusLabel(meta){
+    if(sourceStorageState.loading)return '<span class="badge">Đang kiểm tra…</span>';
+    if(sourceStorageState.error)return '<span class="badge bad">Lỗi Storage</span>';
+    return sourceStorageState.files?.[meta.storagePath]?'<span class="badge good">Đã lưu</span>':'<span class="badge warn">Chưa upload</span>';
+  }
+  function renderSources(){
+    setHeader('Tài liệu nguồn','One Source of Truth · File Excel gốc + data lineage');
+    const canUpload=window.SAVA_SUPABASE?.configured&&window.SAVA_SUPABASE.getRole?.()==='admin';
+    const cards=SOURCE_WORKBOOKS.map(meta=>{const file=sourceStorageState.files?.[meta.storagePath];const updated=file?.updated_at||file?.created_at||'';const size=file?.metadata?.size;return `<article class="source-file-card"><div class="source-file-top"><div><span class="source-file-type">${esc(meta.type)}</span><h3>${esc(meta.module)}</h3></div>${sourceStatusLabel(meta)}</div><p class="source-file-name">${esc(meta.name)}</p><div class="source-file-stats"><span><b>${meta.sheets}</b> sheets</span><span><b>${meta.formulas.toLocaleString('en-US')}</b> formulas</span><span><b>Owner:</b> ${esc(meta.owner)}</span></div><p>${esc(meta.note)}</p>${file?`<div class="source-file-saved"><b>✓ Đã lưu trên Supabase</b><span>${updated?`Cập nhật: ${esc(new Date(updated).toLocaleString('vi-VN'))}`:''}${size?` · ${(size/1024/1024).toFixed(2)} MB`:''}</span></div>`:''}<div class="source-file-actions"><button class="ghost" data-source-download="${meta.id}" ${file?'':'disabled'}>↓ Tải file Excel gốc</button>${canUpload?`<button class="ghost" data-source-upload="${meta.id}">${file?'Thay file nguồn':'Upload file nguồn'}</button>`:''}</div></article>`}).join('');
+    const mapRows=[
+      ['Partner Selection','Partner profile · Hard Gate · Evidence · Partner Fit · Risk · Decision','Các module khác chỉ đọc Partner ID / Fit / Risk / Deal summary'],
+      ['Game Selection','Candidate intake · Product/Market score · SAVA Publishing Fit','Market dùng làm evidence năng lực; Sourcing/Deal/Operation link theo Game ID'],
+      ['Market Intelligence','Market economics · Growth · RPD · CPI · taxonomy mechanic','Sourcing đọc Định hướng/Market evidence; Game Selection đọc Market inputs'],
+      ['Deal Making','RS · MG/đầu tư · UA commitment · Recoup · negotiation · milestone · exit','Partner/Operation chỉ hiển thị lại Deal đã link; không nhập lại'],
+      ['Sourcing','Stage Funnel · Screening · SLA · strategic direction fit 100/60/20','Tham chiếu Partner/Game/Market; không thay thế score của các module nguồn'],
+      ['Publishing Operation','Post-deal SOP · Product Test · Monetization · Expansion · Scale gate','Nhận Game/Partner/Deal đã chốt và phản hồi performance thực tế về hệ thống']
+    ].map(r=>`<tr>${r.map((x,i)=>`<td${i===0?'><b>':'>'}${esc(x)}${i===0?'</b>':''}</td>`).join('')}</tr>`);
+    content.innerHTML=`<div class="notice"><b>Nguyên tắc:</b> mỗi dữ liệu chỉ có một module sở hữu. Các tab khác đọc lại bằng ID/link thay vì nhập lại. File Excel trong mục này được lưu ở <b>Supabase Storage private</b>, không nằm trong GitHub Pages public.</div><div class="source-files-grid">${cards}</div>${panel('Bản đồ nguồn dữ liệu',table(['Module sở hữu','Dữ liệu gốc','Cách module khác sử dụng'],mapRows,'source-map-table'),'Rule nền để tránh nhập trùng và tránh hai tab cho ra hai giá trị khác nhau.')}${panel('Luồng dữ liệu chung',`<div class="source-flow"><span>Market Intelligence</span><b>→</b><span>Sourcing</span><b>→</b><span>Partner + Game Selection</span><b>→</b><span>Deal Making</span><b>→</b><span>Publishing Operation</span><b>↺</b><span>Performance feedback</span></div>`,'Performance thực tế sau Test/Launch/Scale phải quay lại làm evidence cho Game, Partner và Market.')}`;
+    bindSourceActions();
+    if(window.SAVA_SUPABASE?.configured&&!sourceStorageState.loaded&&!sourceStorageState.loading)refreshSourceStorage();
+  }
+  function bindSourceActions(){
+    document.querySelectorAll('[data-source-download]').forEach(btn=>btn.onclick=async()=>{const meta=SOURCE_WORKBOOKS.find(x=>x.id===btn.dataset.sourceDownload);if(!meta)return;btn.disabled=true;try{await window.SAVA_SUPABASE.downloadSourceFile(meta.storagePath,meta.name);toast('Đã tải file Excel gốc');}catch(e){console.error(e);toast(`Tải file thất bại: ${e.message}`);}finally{btn.disabled=false;}});
+    document.querySelectorAll('[data-source-upload]').forEach(btn=>btn.onclick=()=>{const meta=SOURCE_WORKBOOKS.find(x=>x.id===btn.dataset.sourceUpload);if(!meta)return;const input=document.createElement('input');input.type='file';input.accept=meta.type==='XLSM'?'.xlsm':'.xlsx';input.onchange=async()=>{const file=input.files?.[0];if(!file)return;btn.disabled=true;try{await window.SAVA_SUPABASE.uploadSourceFile(meta.storagePath,file);toast(`Đã lưu ${meta.module} vào kho riêng tư`);sourceStorageState.loaded=false;await refreshSourceStorage();}catch(e){console.error(e);toast(`Upload thất bại: ${e.message}`);}finally{btn.disabled=false;}};input.click();});
+  }
+  async function refreshSourceStorage(){
+    if(!window.SAVA_SUPABASE?.configured||!window.SAVA_SUPABASE.listSourceFiles)return;
+    sourceStorageState.loading=true;sourceStorageState.error='';if(currentView==='sources')renderSources();
+    try{const list=await window.SAVA_SUPABASE.listSourceFiles();sourceStorageState.files=Object.fromEntries((list||[]).map(x=>[x.name,x]));sourceStorageState.loaded=true;}catch(e){sourceStorageState.error=e.message;console.error(e);}finally{sourceStorageState.loading=false;if(currentView==='sources')renderSources();}
+  }
 
   function renderOperations(){
     setHeader('Publishing Operation','6 · Roadmap vận hành sau Deal');
@@ -1446,7 +1565,7 @@
   document.addEventListener('click',e=>{
     const a=e.target.closest('[data-action]');if(!a)return;
     const act=a.dataset.action;
-    if(act==='account')window.SAVA_SUPABASE?.accountAction?.(); else if(act==='refresh-cloud')refreshCloud(); else if(act==='open-sync')openSync(); else if(act==='export-json')exportJson(); else if(act==='quick-add'){({partners:()=>openPartner(),deals:()=>openDeal(),market:()=>openPublisher(),games:()=>openGame(),sourcing:()=>openSourcing(),operations:()=>openProject()}[currentView]||(()=>openSourcing()))();}
+    if(act==='account')window.SAVA_SUPABASE?.accountAction?.(); else if(act==='refresh-cloud')refreshCloud(); else if(act==='open-sync')openSync(); else if(act==='export-json')exportJson(); else if(act==='quick-add'){({partners:()=>openPartner(),deals:()=>openDeal(),market:()=>openPublisher(),games:()=>openGame(),sourcing:()=>openSourcing(),operations:()=>openProject(),sources:()=>toast('Tài liệu nguồn chỉ Admin mới được upload/replace')}[currentView]||(()=>openSourcing()))();}
     else if(act==='add-partner')openPartner();else if(act==='add-risk')addRisk();else if(act==='add-deal')openDeal();else if(act==='deal-rules')openDealRules();else if(act==='add-publisher')openPublisher();else if(act==='add-game')openGame();else if(act==='add-sourcing')openSourcing();else if(act==='add-project')openProject();
   });
   $('#globalSearch').addEventListener('input',e=>{searchTerm=e.target.value;render();});

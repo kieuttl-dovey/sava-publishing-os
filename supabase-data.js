@@ -33,7 +33,7 @@
     root.innerHTML = `
       <div class="auth-screen">
         <div class="auth-card">
-          <div class="auth-brand"><div class="brand-mark">S</div><div><strong>SAVA</strong><span>Publishing OS</span></div></div>
+          <div class="auth-brand"><div class="brand-mark"><img src="assets/sava-logo.png" alt="SAVA" /></div><div><strong>SAVA</strong><span>Publishing OS</span></div></div>
           <p class="eyebrow">Internal workspace</p>
           <h1>Sign in</h1>
           <p class="muted">Use the account created by the SAVA Publishing admin.</p>
@@ -397,9 +397,9 @@
     canDelete: () => profile?.role === 'admin',
     getRole: () => profile?.role || 'viewer',
     getUser: () => clone(profile || {}),
+    getSnapshot: () => snapshot ? clone(snapshot) : null,
     listSourceFiles,
     uploadSourceFile,
-    downloadSourceFile,
-    getSnapshot: () => snapshot ? clone(snapshot) : null
+    downloadSourceFile
   };
 })();

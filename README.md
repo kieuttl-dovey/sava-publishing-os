@@ -1,3 +1,16 @@
+# v0.25 — SAVA Brand refresh + Executive Dashboard
+
+- Áp dụng lại typography theo guideline: **Roboto** cho body/UI và **Space Grotesk** cho heading, KPI, display number.
+- Đồng bộ palette SAVA: **Electric Blue #0741E1 · Azure #0078D7 · Cyan #00AFF0 · Iris #EDECFF · Void #03041C · Ink #3A3A50 · Slate #6F6C8F · Mist #A0A3BD**.
+- Gắn logo SAVA thật vào sidebar, màn đăng nhập, favicon và Executive Dashboard.
+- Sidebar chuyển sang nền Void sạch, active state dùng Electric Blue → Azure; Cyan dùng cho highlight/visual anchor thay vì trang trí quá nhiều.
+- Dashboard được thiết kế lại cho cấp quản lý: Executive Summary, 6 KPI cross-module, Việc cần chú ý, Market P1/P2, Funnel Sourcing, Partner/Game nổi bật, Deal risk, Publishing Roadmap và Audit gần đây. Tất cả tự đọc dữ liệu hiện tại, không nhập lại.
+- Tài khoản Viewer ẩn nút Import/+Thêm để màn hình Sếp gọn hơn; vẫn được xem/Export.
+- Khôi phục tab **Tài liệu nguồn** + trạng thái `Đã lưu trên Supabase`, thời gian cập nhật và dung lượng file; giữ private Storage đã setup.
+- Không cần migration SQL mới.
+
+---
+
 # v0.24 — Publishing Operation dạng Roadmap sau Deal
 
 - Double-check trực tiếp workbook `Publishing_Launching_1 (1).xlsx`, đặc biệt `Tổng quan`, `Publishing flow`, `Hybrid IAP Game`, `Hybrid IAA Game`, `KPI reference` và `Publishing projects`.

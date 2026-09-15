@@ -1,4 +1,4 @@
-# v0.19 — Market Priority P1 → P5 + rule hiển thị ngoài màn hình
+# v0.20 — Sourcing UI/UX refresh + Market Priority P1 → P5
 
 - Chuẩn hóa **Định hướng Market** thành thứ tự ưu tiên giảm dần: **P1 → P2 → P3 → P4 → P5**.
 - **P1 · Ưu tiên chủ động**: Sức hấp dẫn ≥75, xu hướng Bứt phá/Tăng trưởng tốt và SAVA Fit ≥70. Chủ động tìm game/đối tác và fast-track opportunity phù hợp.
@@ -328,3 +328,12 @@ The files under `data/` are empty fallbacks and do not contain the migrated inte
 - Missing SAVA Fit now remains **Chưa nhập** and does **not** block `Ưu tiên kiểm thử`.
 - `Ưu tiên tìm kiếm game/đối tác` still requires SAVA Fit >= 70/100.
 - Expected current examples: `Block / Slide / Jam` and `Sort / Flow` move to **Ưu tiên kiểm thử** when SAVA Fit is blank.
+
+
+## v0.20 · Sourcing UI/UX refresh
+- Đồng bộ tab **Sourcing** với hệ màu SAVA: Electric Blue / Azure / Cyan / Iris và semantic Green / Amber / Red.
+- KPI có hierarchy rõ theo Volume → Quality → Deal → Scale → Attention.
+- Funnel 7 bước dùng accent riêng theo stage, compact hơn và dễ scan conversion.
+- Lead `STUCK` / quá hạn được highlight trực tiếp trong bảng hành động.
+- Screening, bottleneck, guideline và các bảng hiệu quả được làm gọn để giảm cảm giác spreadsheet và match visual system toàn web.
+- Không thay đổi logic / dữ liệu / Supabase schema.

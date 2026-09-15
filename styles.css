@@ -228,3 +228,103 @@ body{background:linear-gradient(180deg,#F7FAFF 0%,#F3F7FF 100%)}
 .market-priority-rule-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.market-priority-rule{padding:10px;border:1px solid #E2E7F0;border-radius:10px;background:#fff;min-height:112px}.market-priority-rule>b{display:block;font-family:"Space Grotesk",sans-serif;font-size:11px;margin-bottom:6px}.market-priority-rule>span,.market-priority-rule>small{display:block;font-size:9.5px;line-height:1.4}.market-priority-rule>span{color:var(--ink)}.market-priority-rule>small{color:var(--slate);margin-top:5px}.market-priority-rule.p1{border-color:#BFEDE4;background:#F3FBF8}.market-priority-rule.p2{border-color:#CADCFF;background:#F5F8FF}.market-priority-rule.p3{border-color:#BCEBF4;background:#F2FCFE}.market-priority-rule.p4{border-color:#F0D79A;background:#FFFAEF}.market-priority-rule.p5{border-color:#F2CBD3;background:#FFF7F9}.market-unranked-note{margin-top:8px;padding:8px 10px;border-radius:8px;background:#F1F3F7;color:var(--slate);font-size:9.8px}
 @media(max-width:1400px){.market-priority-rule-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.market-priority-rule-grid{grid-template-columns:1fr}.market-priority-rule-head{display:block}.market-priority-rule-head p{text-align:left;margin-top:6px}}
+
+/* v0.20 · Sourcing visual system — aligned to SAVA brand */
+.sourcing-page{--s-blue:#0741E1;--s-azure:#0078D7;--s-cyan:#00AFF0;--s-iris:#EDECFF;--s-good:#0B6E5A;--s-good-bg:#E8F7F2;--s-warn:#9A5B00;--s-warn-bg:#FFF3DF;--s-bad:#C42D45;--s-bad-bg:#FDECF0;display:grid;gap:16px}
+.sourcing-page>.panel,.sourcing-page>.sourcing-two-col{margin-top:0}
+.sourcing-section-label{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 2px -4px;padding-top:2px}
+.sourcing-section-label span{font:700 13px/1.2 'Space Grotesk',sans-serif;color:var(--void);letter-spacing:-.01em}
+.sourcing-section-label small{font-size:10.5px;color:var(--slate)}
+
+/* KPI hierarchy: volume → quality → commitment → outcome → attention */
+.sourcing-kpis{gap:12px;margin-bottom:0!important}
+.sourcing-kpis .kpi{min-height:124px;padding:17px 18px;box-shadow:0 10px 26px rgba(3,4,28,.055);border-color:#E2E8F3}
+.sourcing-kpis .kpi:before{height:4px}
+.sourcing-kpis .kpi:nth-child(1):before{background:linear-gradient(90deg,var(--s-blue),var(--s-azure))}
+.sourcing-kpis .kpi:nth-child(2):before{background:linear-gradient(90deg,var(--s-cyan),#45CBEA)}
+.sourcing-kpis .kpi:nth-child(3):before{background:linear-gradient(90deg,#5C54A4,#8A83D0)}
+.sourcing-kpis .kpi:nth-child(4):before{background:linear-gradient(90deg,#0B6E5A,#23A886)}
+.sourcing-kpis .kpi:nth-child(5):before{background:linear-gradient(90deg,#C42D45,#F06B7F)}
+.sourcing-kpis .kpi:nth-child(2){background:linear-gradient(180deg,#fff 0%,#F5FCFF 100%)}
+.sourcing-kpis .kpi:nth-child(4){background:linear-gradient(180deg,#fff 0%,#F4FBF8 100%)}
+.sourcing-kpis .kpi:nth-child(5){background:linear-gradient(180deg,#fff 0%,#FFF8FA 100%)}
+.sourcing-kpis .kpi .value{font-size:28px}
+
+/* Funnel — one visual language, progressive stage accents */
+.sourcing-page .panel{border-color:#E2E8F3;box-shadow:0 10px 28px rgba(3,4,28,.05)}
+.sourcing-page .panel-head{padding:14px 16px;background:linear-gradient(180deg,#fff,#FCFDFF)}
+.sourcing-page .panel-head h2{font-size:15px}
+.sourcing-page .panel-head p{font-size:10.5px;line-height:1.45}
+.sourcing-page .panel-body{padding:15px 16px}
+.sourcing-funnel{gap:6px;padding:2px 0 4px}
+.sourcing-funnel-step{min-width:132px;padding:13px 13px 12px;border-radius:12px;background:#fff;box-shadow:0 5px 14px rgba(3,4,28,.035);overflow:hidden}
+.sourcing-funnel-step:before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--stage-color,var(--s-blue))}
+.sourcing-funnel-step.sourcing-stage-0{--stage-color:#A0A3BD;background:linear-gradient(180deg,#fff,#FAFBFD)}
+.sourcing-funnel-step.sourcing-stage-1{--stage-color:#00AFF0;background:linear-gradient(180deg,#fff,#F5FCFF)}
+.sourcing-funnel-step.sourcing-stage-2{--stage-color:#0078D7;background:linear-gradient(180deg,#fff,#F5F9FF)}
+.sourcing-funnel-step.sourcing-stage-3{--stage-color:#5C54A4;background:linear-gradient(180deg,#fff,#FAF8FF)}
+.sourcing-funnel-step.sourcing-stage-4{--stage-color:#0741E1;background:linear-gradient(180deg,#fff,#F5F7FF)}
+.sourcing-funnel-step.sourcing-stage-5{--stage-color:#0B6E5A;background:linear-gradient(180deg,#fff,#F4FBF8)}
+.sourcing-funnel-step.sourcing-stage-6{--stage-color:#0B6E5A;background:linear-gradient(180deg,#F7FCFA,#ECF8F3)}
+.sourcing-funnel-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px}
+.sourcing-funnel-name{font-size:11px;margin:0;color:var(--ink)}
+.sourcing-stage-index{display:grid;place-items:center;width:20px;height:20px;border-radius:7px;background:color-mix(in srgb,var(--stage-color) 12%,white);color:var(--stage-color);font:700 10px 'Space Grotesk',sans-serif}
+.sourcing-funnel-step strong{font-size:25px;color:var(--void)}
+.sourcing-funnel-step small{font-size:10px;line-height:1.35;min-height:26px}
+.sourcing-active-pill{margin-top:7px!important;padding:4px 7px!important;background:color-mix(in srgb,var(--stage-color) 10%,white)!important;color:var(--stage-color)!important;border:1px solid color-mix(in srgb,var(--stage-color) 18%,white);font-size:9.5px!important}
+.sourcing-funnel-arrow{color:#B7C2D6;font-size:18px;padding:0 1px}
+.sourcing-target{border:1px solid #DCE6F7;background:linear-gradient(90deg,#F6F9FF,#FBFDFF);color:#56637A;font-size:10.5px;line-height:1.5}
+.sourcing-target b{color:var(--s-blue)}
+
+/* Screening / effectiveness bars */
+.sourcing-quality{gap:9px}
+.sourcing-bar-row{grid-template-columns:minmax(165px,1.25fr) minmax(110px,2fr) 36px 50px;font-size:11px}
+.sourcing-bar{height:7px;background:#EAF0F8}
+.sourcing-bar i{background:linear-gradient(90deg,var(--s-blue),var(--s-cyan));box-shadow:0 0 0 1px rgba(7,65,225,.03)}
+.sourcing-summary-line{gap:10px;margin-top:12px;padding-top:10px}
+.sourcing-summary-line span{padding:7px 9px;border:1px solid #E2E8F3;border-radius:8px;background:#FAFCFF}
+.sourcing-summary-line b{color:var(--void)}
+
+/* Bottleneck = attention, not generic orange block */
+.bottleneck-card{padding:11px 12px;margin-bottom:10px;border-radius:10px;background:linear-gradient(180deg,#FFF9EE,#FFF6E5);border-color:#F0D49B}
+.bottleneck-card span{font-size:9.5px;color:#8A5B0A}
+.bottleneck-card strong{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#5D3B00}
+.bottleneck-card b{font:700 16px 'Space Grotesk',sans-serif;color:#D47A00}
+
+/* Action table — surface urgency visually */
+.sourcing-action-table tr.sourcing-row-stuck td{background:#FFF5F7}
+.sourcing-action-table tr.sourcing-row-stuck td:first-child{box-shadow:inset 3px 0 0 var(--s-bad)}
+.sourcing-action-table tr.sourcing-row-overdue td{background:#FFFBF3}
+.sourcing-action-table tr.sourcing-row-overdue td:first-child{box-shadow:inset 3px 0 0 #D78A00}
+.sourcing-action-table tr.sourcing-row-stuck:hover td{background:#FFF0F3}
+.sourcing-action-table tr.sourcing-row-overdue:hover td{background:#FFF7E7}
+.sourcing-page .table{font-size:11.5px}
+.sourcing-page .table th{background:#F2F6FF;color:#33405C;font-size:9.5px;padding:9px 10px}
+.sourcing-page .table td{padding:9px 10px}
+.sourcing-page .table .ghost{padding:5px 8px;font-size:10px}
+
+/* Two-column analytics cards */
+.sourcing-two-col{gap:12px}
+.sourcing-two-col>.panel{min-width:0}
+.sourcing-source-table,.sourcing-bd-table{min-width:720px}
+.sourcing-pipeline-table{min-width:1180px}
+
+/* Operating rules use brand tints, not identical cards */
+.sourcing-guide{gap:8px}
+.sourcing-guide>div{padding:11px;border-radius:10px;min-height:88px;background:#fff}
+.sourcing-guide>div:nth-child(1){border-color:#BFEDE4;background:#F4FBF8}.sourcing-guide>div:nth-child(1) b{color:#0B6E5A}
+.sourcing-guide>div:nth-child(2){border-color:#CADCFF;background:#F5F8FF}.sourcing-guide>div:nth-child(2) b{color:#0741E1}
+.sourcing-guide>div:nth-child(3){border-color:#F0D79A;background:#FFFAEF}.sourcing-guide>div:nth-child(3) b{color:#9A5B00}
+.sourcing-guide>div:nth-child(4){border-color:#DAD6F5;background:#FAF9FF}.sourcing-guide>div:nth-child(4) b{color:#5C54A4}
+.sourcing-guide b{font-size:11px;margin-bottom:5px}.sourcing-guide span{font-size:10.5px;line-height:1.45}
+
+/* Edit lead guidance follows the same input / linked / derived visual grammar */
+.sourcing-edit-guide{border-color:#D7E4FA;background:linear-gradient(180deg,#F8FBFF,#F4F8FF);border-radius:12px;padding:13px}
+.sourcing-edit-guide .guide-title{font-size:11.5px;color:var(--s-blue)}
+.sourcing-edit-guide .guide-grid>div{border-color:#DFE7F3;border-radius:9px;padding:9px}
+.sourcing-derived>div,.sourcing-ref-grid>div{border-color:#DFE7F3;background:#FBFCFF}
+.sourcing-ref-grid>div{box-shadow:inset 3px 0 0 rgba(0,120,215,.16)}
+
+@media (max-width:1500px){.sourcing-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.sourcing-funnel-step{min-width:126px}}
+@media (max-width:1100px){.sourcing-section-label{display:block}.sourcing-section-label small{display:block;margin-top:4px}.sourcing-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.sourcing-kpis{grid-template-columns:1fr}.sourcing-funnel-step{min-width:150px}.sourcing-page .panel-body{padding:12px}.sourcing-bar-row{grid-template-columns:minmax(120px,1.1fr) minmax(90px,1.5fr) 30px 44px}}

@@ -1,3 +1,13 @@
+# v0.24 — Publishing Operation dạng Roadmap sau Deal
+
+- Double-check trực tiếp workbook `Publishing_Launching_1 (1).xlsx`, đặc biệt `Tổng quan`, `Publishing flow`, `Hybrid IAP Game`, `Hybrid IAA Game`, `KPI reference` và `Publishing projects`.
+- Tab 6 được đổi từ bảng SOP phẳng sang Roadmap: **P0 Publishing Preflight → Product Test → Monetization Test → Big Budget / Expansion → Scale**.
+- Mỗi đoạn hiển thị mục tiêu, metric trọng yếu, điều kiện chuyển Gate và khác biệt Hybrid IAP / Hybrid IAA.
+- Project portfolio có mini-roadmap: phase đã qua / phase hiện tại / phase tương lai; trạng thái TEST THÊM, HOLD, FAIL/ROLLBACK có màu riêng.
+- Giữ đúng rule nguồn: D1 thuộc Product Test; ROAS D7 chỉ là early signal; Monetization Gate đọc D14; Product Test + Monetization tối đa 2 attempts; HOLD không tính failed attempt.
+- Edit Project chuyển `SOP stage` sang lựa chọn Roadmap chuẩn và tự map `Gate / phase` tương ứng; metrics được chia theo Product / Monetization / Scale để dễ nhập.
+- Không cần migration SQL.
+
 # v0.23 — Game Selection AUTO Score + Manual Override
 
 - Match đúng ghi chú 10_SCORECARD: PRE-SCAN dùng Market + Publishing Readiness + Deal Economics + SAVA Fit.

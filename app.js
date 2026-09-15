@@ -535,11 +535,28 @@
     return n>=80?'Rất tốt':n>=65?'Tốt':n>=50?'Trung bình':'Thấp';
   }
   function marketDirection(x){
-    if(x.completeness<.34)return {key:'data',label:'Bổ sung dữ liệu'};
-    if(x.score!==null&&x.score>=80)return {key:'priority',label:'Ưu tiên sourcing'};
-    if(x.score!==null&&x.score>=70)return {key:'test',label:'Ưu tiên test'};
-    if(x.score!==null&&x.score>=55)return {key:'watch',label:'Theo dõi'};
-    return {key:'low',label:'Không ưu tiên'};
+    const score=num(x.score),fit=num(x.savaFit),trend=x.trend?.key||'na',mon=num(x.monetization);
+    if(x.completeness<.34)return {key:'data',label:'Bổ sung dữ liệu',desc:'Chưa đủ dữ liệu thị trường để đưa ra định hướng đáng tin cậy.'};
+    const declining=['decline','sharp-decline','rev-decline','user-decline'].includes(trend);
+    const strongTrend=['breakout','growth-good'].includes(trend);
+    const testTrend=['low-base','user-expand','rev-growth'].includes(trend);
+    const splitTrend=['user-up-rev-down','rev-up-user-down'].includes(trend);
+    if(declining){
+      if(score!==null&&score>=65&&fit!==null&&fit>=80)return {key:'watch',label:'Theo dõi thêm',desc:'Thị trường đang suy giảm nhưng vẫn có mức phù hợp cao với SAVA; chỉ nên theo dõi có chọn lọc.'};
+      return {key:'low',label:'Chưa ưu tiên',desc:'Xu hướng thị trường đang suy giảm; chưa nên dành nhiều nguồn lực tìm kiếm hoặc kiểm thử.'};
+    }
+    if(score!==null&&score>=80&&fit!==null&&fit>=70&&strongTrend){
+      return {key:'priority',label:'Ưu tiên tìm kiếm game/đối tác',desc:'Thị trường hấp dẫn, xu hướng tăng tốt và đã xác nhận phù hợp với SAVA.'};
+    }
+    if(score!==null&&score>=70&&(
+      strongTrend||testTrend||(trend==='stable'&&mon!==null&&mon>=75)||(splitTrend&&mon!==null&&mon>=65)
+    )&&(fit===null||fit>=55)){
+      return {key:'test',label:'Ưu tiên kiểm thử',desc:'Tín hiệu thị trường tích cực nhưng vẫn cần kiểm chứng thêm bằng game/test thực tế trước khi tăng nguồn lực.'};
+    }
+    if(score!==null&&score>=55){
+      return {key:'watch',label:'Theo dõi thêm',desc:'Có cơ hội nhưng tín hiệu chưa đủ mạnh hoặc chưa đồng thuận để ưu tiên ngay.'};
+    }
+    return {key:'low',label:'Chưa ưu tiên',desc:'Tăng trưởng, khả năng kiếm tiền hoặc mức phù hợp hiện chưa đủ hấp dẫn.'};
   }
   function marketAnalytics(mechanics){
     const list=(mechanics||[]);
@@ -561,7 +578,7 @@
     });
   }
   function marketScoreBar(value){const n=num(value),w=n===null?0:Math.max(0,Math.min(100,n));const cls=n===null?'na':n>=80?'priority':n>=70?'pass':n>=55?'conditional':'review';return `<div class="market-score ${cls}" title="${n===null?'Chưa đủ dữ liệu':`${fmt(n,1)}/100`}"><strong>${n===null?'—':fmt(n,1)}</strong><span><i style="width:${w}%"></i></span></div>`;}
-  function marketDirectionBadge(x){return `<span class="market-direction ${x.direction.key}">${esc(x.direction.label)}</span>`;}
+  function marketDirectionBadge(x){return `<span class="market-direction ${x.direction.key}" title="${esc(x.direction.desc||'')}">${esc(x.direction.label)}</span>`;}
   function marketTopBars(items){
     const top=[...items].filter(x=>x.score!==null&&x.completeness>=.34).sort((a,b)=>b.score-a.score).slice(0,8);if(!top.length)return '<div class="empty">Chưa đủ dữ liệu để xếp hạng.</div>';
     return `<div class="market-bars">${top.map((x,i)=>`<button class="market-bar-row" data-open-market="${esc(x.m.Mechanic_ID)}"><span class="market-rank">${i+1}</span><span class="market-bar-name">${esc(x.m.Mechanic)}</span><span class="market-bar-track"><i style="width:${Math.max(0,Math.min(100,x.score))}%"></i></span><b>${fmt(x.score,1)}</b></button>`).join('')}</div>`;
@@ -575,18 +592,15 @@
   }
   function marketOpportunityMap(items){
     const sorted=[...items].sort((a,b)=>(b.score??-1)-(a.score??-1));
-    const priority=sorted.filter(x=>x.score!==null&&x.score>=75&&x.completeness>=.5);
-    const priorityIds=new Set(priority.map(x=>x.m.Mechanic_ID));
-    const fresh=sorted.filter(x=>!priorityIds.has(x.m.Mechanic_ID)&&x.growth!==null&&x.growth>=70&&x.scale!==null&&x.scale<65&&x.score!==null&&x.score>=55);
-    const freshIds=new Set(fresh.map(x=>x.m.Mechanic_ID));
-    const watch=sorted.filter(x=>!priorityIds.has(x.m.Mechanic_ID)&&!freshIds.has(x.m.Mechanic_ID)&&((x.score!==null&&x.score>=55)||x.completeness<.5));
-    const watchIds=new Set(watch.map(x=>x.m.Mechanic_ID));
-    const low=sorted.filter(x=>!priorityIds.has(x.m.Mechanic_ID)&&!freshIds.has(x.m.Mechanic_ID)&&!watchIds.has(x.m.Mechanic_ID)&&x.score!==null&&x.score<55&&x.completeness>=.5);
+    const priority=sorted.filter(x=>x.direction.key==='priority');
+    const test=sorted.filter(x=>x.direction.key==='test');
+    const watch=sorted.filter(x=>['watch','data'].includes(x.direction.key));
+    const low=sorted.filter(x=>x.direction.key==='low');
     const groups=[
-      ['Ưu tiên ngay','priority',priority.slice(0,4)],
-      ['Cơ hội mới','new',fresh.slice(0,4)],
-      ['Theo dõi','watch',watch.slice(0,4)],
-      ['Giảm ưu tiên','low',low.slice(0,4)]
+      ['Ưu tiên tìm kiếm game/đối tác','priority',priority.slice(0,4)],
+      ['Ưu tiên kiểm thử','new',test.slice(0,4)],
+      ['Theo dõi thêm','watch',watch.slice(0,4)],
+      ['Chưa ưu tiên','low',low.slice(0,4)]
     ];
     return `<div class="market-opportunity-map">${groups.map(([title,key,xs])=>`<div class="market-opp-card ${key}"><div class="market-opp-head"><b>${title}</b><span>${xs.length}</span></div>${xs.length?xs.map(x=>`<button data-open-market="${esc(x.m.Mechanic_ID)}"><strong>${esc(x.m.Mechanic)}</strong><small>${x.score===null?'—':fmt(x.score,1)}/100 · Xu hướng 3M: ${esc(x.trend.label)}</small></button>`).join(''):'<div class="market-opp-empty">Chưa có mechanic phù hợp</div>'}</div>`).join('')}</div>`;
   }
@@ -595,7 +609,7 @@
     setHeader('Market Intelligence','3 · Định hướng thị trường + Publisher Landscape');
     const mechanics=(db.market||[]).filter(m=>includesSearch(m.Mechanic_ID,m.Mechanic,m.Geography,m.Platform));
     const insights=marketAnalytics(mechanics),ranked=[...insights].sort((a,b)=>(b.score??-1)-(a.score??-1));
-    const priority=insights.filter(x=>x.score!==null&&x.score>=70&&x.completeness>=.34).length;
+    const priority=insights.filter(x=>x.direction.key==='priority').length;
     const strongGrowth=insights.filter(x=>['breakout','growth-good','low-base'].includes(x.trend.key)).length;
     const strongMon=insights.filter(x=>x.monetization!==null&&x.monetization>=75).length;
     const uaReady=insights.filter(x=>x.ua!==null&&x.ua>=65).length;
@@ -605,11 +619,11 @@
     const top=ranked.find(x=>x.score!==null),topGrowth=[...insights].filter(x=>x.growth!==null).sort((a,b)=>(b.growth??-1)-(a.growth??-1))[0];
     const executiveNote=`<div class="market-exec-note"><b>Đọc nhanh cho quyết định:</b> ${top?`Cơ hội tổng hợp cao nhất hiện tại là <strong>${esc(top.m.Mechanic)}</strong> (${fmt(top.score,1)}/100).`: 'Chưa đủ dữ liệu để xếp hạng.'} ${topGrowth?`Đà tăng trưởng tương đối nổi bật: <strong>${esc(topGrowth.m.Mechanic)}</strong> (${fmt(topGrowth.growth,0)}/100 · ${esc(topGrowth.trend.label)}).`:''}<span><b>Đà tăng trưởng /100</b> = xếp hạng tương đối của DL Growth 3M và Revenue Growth 3M theo tỷ trọng 50/50. <b>Khả năng kiếm tiền /100</b> = xếp hạng RPD so với các mechanic khác. 100 = thuộc nhóm tốt nhất trong tập dữ liệu, không phải % tăng trưởng thực tế.</span></div>`;
     const formula=`<div class="market-formula"><span><b>30%</b> Quy mô</span><span><b>25%</b> Đà tăng trưởng</span><span><b>20%</b> Khả năng kiếm tiền</span><span><b>15%</b> UA</span><span><b>10%</b> Phù hợp SAVA</span><small><b>Đà tăng trưởng /100:</b> 50% xếp hạng DL Growth 3M + 50% xếp hạng Revenue Growth 3M. <b>Khả năng kiếm tiền /100:</b> percentile RPD trong tập mechanic. Nếu thiếu một trong hai Growth metric, phần Đà tăng trưởng được coi là chưa đủ dữ liệu và trọng số sẽ tự phân bổ lại.</small></div>`;
-    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('Thị trường nên ưu tiên',priority,'Sức hấp dẫn ≥ 70/100')}${kpi('Tăng trưởng đồng thuận',strongGrowth,'DL & Revenue 3M cùng tăng ≥ 10%')}${kpi('Khả năng kiếm tiền nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
+    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('Ưu tiên tìm kiếm game/đối tác',priority,'Market tốt + xu hướng khỏe + SAVA Fit đã xác nhận')}${kpi('Tăng trưởng đồng thuận',strongGrowth,'DL & Revenue 3M cùng tăng ≥ 10%')}${kpi('Khả năng kiếm tiền nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
       ${executiveNote}
       <div class="market-chart-grid"><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">XẾP HẠNG</span><h3>Top Sức hấp dẫn thị trường /100</h3></div></div>${marketTopBars(insights)}</section><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">BẢN ĐỒ CƠ HỘI</span><h3>Đà tăng trưởng × Khả năng kiếm tiền</h3></div><small>Kích thước điểm ≈ quy mô tương đối · 100 = nhóm tốt nhất trong dataset</small></div>${marketScatter(insights)}<div class="market-chart-guide"><span><b>Trên phải:</b> tăng nhanh + kiếm tiền tốt</span><span><b>Trên trái:</b> kiếm tiền tốt, tăng chậm</span><span><b>Dưới phải:</b> tăng nhanh, kiếm tiền yếu</span><span><b>Dưới trái:</b> ưu tiên thấp</span></div></section></div>
       ${panel('Định hướng thị trường',formula+table(['Thị trường / Mechanic','Sức hấp dẫn /100','Quy mô','Xu hướng 3M','Khả năng kiếm tiền','CPI','Phù hợp SAVA /100','Định hướng'],execRows,'market-exec-table'),'Bảng dành cho quyết định: click mechanic để xem / cập nhật dữ liệu chi tiết và nhập mức phù hợp với SAVA.')}
-      ${panel('Bản đồ cơ hội SAVA',marketOpportunityMap(insights),'Phân nhóm tự động từ dữ liệu hiện có; dùng để xác định nơi nên sourcing, test, theo dõi hoặc giảm ưu tiên.')}
+      ${panel('Bản đồ cơ hội SAVA',marketOpportunityMap(insights),'Phân nhóm tự động để Sếp nhìn nhanh nơi nên chủ động tìm game/đối tác, nơi nên kiểm thử, nơi cần theo dõi thêm hoặc chưa nên dành nhiều nguồn lực.')}
       ${panel('Publisher Landscape',pubs.length?table(['Publisher','Thể loại trọng tâm','Đang tìm gì','Cách test','Cách đầu tư','Cách deal','Cách vận hành'],pubs):'<div class="empty"><b>Chưa có dữ liệu Publisher Landscape riêng trong các file nguồn hiện tại.</b><br/>Team có thể bổ sung benchmark tại đây mà không trộn giả định vào dữ liệu thị trường gốc.</div>','Theo dõi publisher đang tìm game gì, cách họ test, đầu tư, deal và vận hành.',`<button class="primary" data-action="add-publisher">+ Publisher benchmark</button>`)}
       ${panel('Dữ liệu chi tiết',`<details class="market-raw-details"><summary>Xem bảng Market Economics + UA Benchmark (${mechanics.length} mechanics)</summary>${table(['ID','Mechanic','Geo','DL 30D','Revenue 30D','DL Growth 3M','Rev Growth 3M','RPD','CPI Median'],rawRows,'market-raw-table')}</details>`,'Dữ liệu gốc từ Market Economics + UA Benchmark; các tổng lịch sử có thể bị giới hạn coverage đúng như ghi chú trong workbook nguồn.')}`;
     bindOpeners();

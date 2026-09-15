@@ -1,4 +1,15 @@
-# SAVA Publishing OS v0.10 — Market Trend Logic & Clearer Metrics
+# SAVA Publishing OS v0.11 — Executive Market Direction
+
+## v0.11 changes — định hướng thị trường dễ hiểu cho Sếp
+
+- Đổi nhãn `Ưu tiên sourcing` thành **Ưu tiên tìm kiếm game/đối tác**.
+- Đổi `Ưu tiên test` thành **Ưu tiên kiểm thử**; `Theo dõi` thành **Theo dõi thêm**; `Không ưu tiên` thành **Chưa ưu tiên**.
+- Logic `Ưu tiên tìm kiếm game/đối tác` không còn chỉ dựa vào Market Score: cần đồng thời **Sức hấp dẫn >= 80/100**, **Phù hợp SAVA >= 70/100** và xu hướng **Bứt phá/Tăng trưởng tốt**.
+- `Ưu tiên kiểm thử` dùng cho market có tín hiệu tốt nhưng còn cần kiểm chứng thực tế, bao gồm market tăng từ nền thấp, mở rộng user hoặc tăng trưởng doanh thu.
+- Market suy giảm được hạ xuống **Chưa ưu tiên**, trừ trường hợp SAVA Fit rất cao thì giữ ở **Theo dõi thêm**.
+- Opportunity Map dùng cùng một logic với cột Định hướng, tránh hai khu vực cho kết luận khác nhau.
+
+## Lịch sử v0.10 — Market Trend Logic & Clearer Metrics
 
 Internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
 

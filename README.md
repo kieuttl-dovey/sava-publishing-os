@@ -1,3 +1,18 @@
+# SAVA Publishing OS v0.17 — Connected Data / One Source of Truth
+
+## Double-check với file nguồn
+- `SAVA Publishing Fit` trong workbook Game Selection **không phải metric Market nhập tay**. Nguồn gốc nằm ở `07_PUBLISHING_INTAKE` với 7 tiêu chí 1–5: UA & Creative Ops, Monetization & LiveOps, GEO & Channel, Genre Knowledge, Creative Production, Portfolio/Strategic Fit, Internal Operator Availability. `10_SCORECARD` lấy trung bình 7 tiêu chí thành `SAVA_Publishing_Fit_1_5 (AUTO)`; trọng số là **15% Pre-Scan** và **10% Post-Test**.
+- Workbook gốc chỉ định nghĩa Fit ở cấp **Game/Candidate**. v0.17 thêm lớp tổng hợp ở cấp **Mechanic** để Market Intelligence dùng chung: **trung bình SAVA Publishing Fit /100 của các Game/Candidate cùng mechanic**. Đây là logic kết nối của Publishing OS, không phải một input mới phải nhập lại.
+- Nếu mechanic chưa có Game/Candidate có Fit, hệ thống hiển thị **Chưa đủ dữ liệu**; không tự đoán điểm.
+
+## Kết nối dữ liệu đã bật trong v0.17
+1. **Game Selection → Market Intelligence:** Phù hợp SAVA /100 tự tổng hợp theo mechanic; Market không còn field nhập tay cho điểm này.
+2. **Game Selection:** 7 thành phần SAVA Publishing Fit được nhập đúng theo workbook nguồn; điểm tổng /100 tự tính và dùng lại trong Pre-Scan/Post-Test.
+3. **Deal Making → Partner Selection:** Revenue Share và Cam kết UA ở bảng Partner ưu tiên dùng Deal đang active/đàm phán nếu đã link Partner; không nhập lại cùng một dữ liệu ở 2 nơi.
+4. **Market Intelligence → Sourcing:** Lead đã link Game hoặc match chính xác mechanic sẽ dùng Định hướng + điểm Sức hấp dẫn từ Market Intelligence. Lead lịch sử chưa map được vẫn dùng nhóm chiến lược fallback.
+
+> Nguyên tắc hệ thống: dữ liệu gốc nhập ở module sở hữu dữ liệu; module khác chỉ đọc/tổng hợp. Không duplicate input nếu đã có source of truth.
+
 # SAVA Publishing OS v0.15 — Market Opportunity Map Fix
 
 ## v0.15 changes
@@ -296,3 +311,30 @@ No build step or package installation is required.
 The deployable repository contains no seeded internal partner/game/deal database. Business records remain in Supabase behind login + RLS.
 
 The files under `data/` are empty fallbacks and do not contain the migrated internal records.
+## v0.16 - Market Opportunity Map bug fix
+- Fixes a missing-value bug where an unfilled `SAVA Fit` was converted to `0/100` by JavaScript (`Number(null) === 0`).
+- Missing SAVA Fit now remains **Chưa nhập** and does **not** block `Ưu tiên kiểm thử`.
+- `Ưu tiên tìm kiếm game/đối tác` still requires SAVA Fit >= 70/100.
+- Expected current examples: `Block / Slide / Jam` and `Sort / Flow` move to **Ưu tiên kiểm thử** when SAVA Fit is blank.
+
+---
+
+## v0.18 — Connected source-of-truth + private Excel library
+
+### Cross-module corrections
+
+The tool now treats all five source workbooks as one Publishing OS instead of independent tabs.
+
+- **Market Attractiveness /100 is market-only.** It uses market Size, Growth/Momentum, Monetization and UA evidence. The original Game Selection framework also contains Entry Accessibility; when that input is not standardized in the Market view, the tool omits it instead of inventing a value and re-normalizes the remaining available market inputs.
+- **Strategic fit with SAVA /100** is taken from the Sourcing workbook (`07_Market_Intel_Ref`): direct strategic focus = 100, adjacent = 60, outside focus = 20.
+- **Execution capability evidence /100** is shown separately and is derived from Game Selection's `SAVA Publishing Fit` for Game/Candidates in the same mechanic. It is evidence of proven capability, not Market Attractiveness.
+- **Sourcing's market-fit field** now remains strategic alignment (as defined by the Sourcing workbook) and can additionally show Market Intelligence direction/attractiveness. It no longer substitutes Market Attractiveness for strategic fit.
+- **Deal terms** remain owned by Deal Making; Partner views only reuse linked Deal outputs.
+
+### Source workbook library
+
+A new **Tài liệu nguồn** page lists the five original workbooks, their owning modules, sheet counts and formula counts. Files are intended to be stored in the private Supabase Storage bucket `publishing-source-workbooks`.
+
+Run `SAVA_Publishing_OS_v0.18_Source_Files_Storage.sql` once in Supabase SQL Editor. Then log in as Admin, open **Tài liệu nguồn**, and upload each original workbook. Authenticated users can then download the exact original workbook from the tool. The files are not put in the public GitHub Pages repository.
+
+Because the original workbook bytes are uploaded unchanged, Excel formulas and the `.xlsm` macro container are preserved exactly as supplied.

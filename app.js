@@ -8,7 +8,8 @@
     ['market','3','Market Intelligence'],
     ['games','4','Game Selection'],
     ['sourcing','5','Sourcing'],
-    ['operations','6','Publishing Operation']
+    ['operations','6','Publishing Operation'],
+    ['sources','Nguồn','Tài liệu nguồn']
   ];
   const STAGES = ['Lead','Qualified','Evaluation','Deal','Test','Launch','Scale'];
   const SOURCING_SLA = {Lead:14, Qualified:10, Evaluation:14, Deal:30, Test:21, Launch:30, Scale:999};
@@ -20,6 +21,29 @@
   const EVIDENCE_STATUS = ['','Đã xác minh','Partner cung cấp','Đã trao đổi','Thiếu','N/A'];
   const GATE_STATUS = ['Đạt','Chờ xác minh','Không đạt'];
   const GAME_GATE_STATUS = ['PASS','PASS / Monitor','PENDING','FAIL'];
+  const SAVA_FIT_COMPONENTS = [
+    ['UA_Creative_Ops_Fit_1_5','UA & Creative Ops'],
+    ['Monetization_LiveOps_Fit_1_5','Monetization & LiveOps'],
+    ['GEO_Channel_Fit_1_5','GEO & Channel'],
+    ['Genre_Knowledge_1_5','Hiểu biết thể loại'],
+    ['Creative_Production_Fit_1_5','Năng lực sản xuất Creative'],
+    ['Portfolio_Strategic_Fit_1_5','Phù hợp Portfolio / chiến lược'],
+    ['Internal_Operator_Availability_1_5','Nguồn lực vận hành nội bộ']
+  ];
+  const SOURCE_WORKBOOKS = [
+    {id:'game-market',module:'Market Intelligence + Game Selection',name:'SAVA_Mobile_Game_Decision_Pub(3)_UPDATED_SCORES_SAFE (3).xlsm',storagePath:'01_game_market_selection.xlsm',type:'XLSM',sheets:53,formulas:8024,owner:'Market Intelligence / Game Selection',note:'Nguồn Market economics, UA benchmark, Publishing Intake, SAVA Publishing Fit, Pre-Scan/Post-Test và Dashboard.'},
+    {id:'partner',module:'Partner Selection',name:'Publishing_Partner_Selection_Playbook (1).xlsx',storagePath:'02_partner_selection.xlsx',type:'XLSX',sheets:5,formulas:2441,owner:'Partner Selection',note:'Nguồn Partner profile, Hard Gate, Evidence, Partner Fit, Risk và Decision.'},
+    {id:'deal',module:'Deal Making',name:'SAVA_Deal_Making_Playbook_Thuan_Viet_v14_Huong_Dan_03_04(1).xlsx',storagePath:'03_deal_making.xlsx',type:'XLSX',sheets:8,formulas:7440,owner:'Deal Making',note:'Nguồn Revenue Share, MG/đầu tư, UA commitment, negotiation, milestone, exit và approval.'},
+    {id:'sourcing',module:'Sourcing',name:'SAVA_Sourcing_Funnel_KPI_Thuan_Viet(1).xlsx',storagePath:'04_sourcing_funnel.xlsx',type:'XLSX',sheets:9,formulas:15478,owner:'Sourcing',note:'Nguồn Lead → Qualified → Evaluation → Deal → Test → Launch → Scale, KPI Funnel và mapping tham chiếu các module.'},
+    {id:'operation',module:'Publishing Operation',name:'Publishing_Launching_1 (1).xlsx',storagePath:'05_publishing_operation.xlsx',type:'XLSX',sheets:8,formulas:0,owner:'Publishing Operation',note:'Nguồn SOP sau Deal, Hybrid IAP/IAA, KPI reference và Publishing Projects.'}
+  ];
+  const STRATEGY_FIT_RULES = [
+    {key:'puzzle',label:'Puzzle',score:100,match:m=>/^MECH-00[1-9]$/.test(m.Mechanic_ID)||/^MECH-01[0-2]$/.test(m.Mechanic_ID)},
+    {key:'simulation',label:'Simulation',score:100,match:m=>/^MECH-01[3-9]$/.test(m.Mechanic_ID)||/^MECH-02[0-2]$/.test(m.Mechanic_ID)},
+    {key:'rpg-td',label:'RPG / TD',score:100,match:m=>['MECH-025','MECH-028','MECH-029','MECH-030'].includes(m.Mechanic_ID)},
+    {key:'strategy-adjacent',label:'Hyper / Strategy liền kề',score:60,match:m=>['MECH-026','MECH-027'].includes(m.Mechanic_ID)}
+  ];
+  let sourceStorageState = {loading:false,loaded:false,files:{},error:''};
   const LOCAL_KEY = 'savaPublishingOS.db.v1';
   const TOKEN_KEY = 'savaPublishingOS.githubToken';
   const SEED = clone(window.SAVA_SEED_DB || {});
@@ -189,11 +213,43 @@
     const total=items.reduce((s,[k,w])=>s+num(scores[k])*w,0); const wsum=items.reduce((s,[,w])=>s+w,0);
     return Math.round((total/5/wsum*100)*10)/10;
   }
+  function gameSavaFitDerived(g){
+    const components=SAVA_FIT_COMPONENTS.map(([key,label])=>({key,label,value:num(intake(g,key))}));
+    const present=components.filter(x=>x.value!==null);
+    let avg5=present.length?present.reduce((s,x)=>s+x.value,0)/present.length:null;
+    // Backward compatibility: old records may only have the aggregate scorecard value.
+    if(avg5===null)avg5=num(g?.scorecard?.savaFit);
+    const score=avg5===null?null:Math.round(avg5*20*10)/10;
+    return {avg5:avg5===null?null:Math.round(avg5*100)/100,score,coverage:present.length,components};
+  }
+  function normalizeMechanicName(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,' ');}
+  function mechanicCapabilityEvidence(mechanic){
+    const key=normalizeMechanicName(mechanic);
+    const games=(db.games||[]).filter(g=>normalizeMechanicName(intake(g,'Mechanic'))===key);
+    const scored=games.map(g=>({g,fit:gameSavaFitDerived(g)})).filter(x=>x.fit.score!==null);
+    if(!scored.length)return {score:null,count:0,games:[],method:'Chưa có Game/Candidate cùng mechanic có đủ SAVA Publishing Fit'};
+    const score=Math.round(scored.reduce((sum,x)=>sum+x.fit.score,0)/scored.length*10)/10;
+    return {score,count:scored.length,games:scored,method:'Trung bình SAVA Publishing Fit của Game/Candidate cùng mechanic trong Game Selection'};
+  }
+  function mechanicStrategicFit(m){
+    if(!m)return {score:null,label:'Chưa xác định',group:'Chưa xác định',source:'Sourcing · 07_Market_Intel_Ref'};
+    if(m.Mechanic_ID==='MECH-023')return {score:null,label:'N/A — QA Queue',group:'Cross-category / QA Queue',source:'Không chấm như mechanic chiến lược'};
+    const rule=STRATEGY_FIT_RULES.find(r=>r.match(m));
+    if(rule)return {score:rule.score,label:rule.score===100?'Cao — Đúng trọng tâm':'Trung bình — Liền kề',group:rule.label,source:'Sourcing · 07_Market_Intel_Ref'};
+    return {score:20,label:'Thấp — Ngoài trọng tâm',group:'Khác / Ngoài trọng tâm',source:'Sourcing · 07_Market_Intel_Ref'};
+  }
+  function mechanicSharedFitHtml(m,capability){
+    const strategic=mechanicStrategicFit(m);
+    const strategyHtml=strategic.score===null?'<span class="muted">—</span>':marketScoreBar(strategic.score);
+    const capHtml=capability?.score===null||capability?.score===undefined?'<span class="muted">Chưa đủ dữ liệu</span>':marketScoreBar(capability.score);
+    const rows=(capability?.games||[]).map(({g,fit:f})=>`<tr><td><b>${esc(intake(g,'Game_Title')||g.id)}</b><div class="small muted">${esc(g.id)} · ${esc(intake(g,'Studio')||'—')}</div></td><td>${marketScoreBar(f.score)}</td><td>${f.coverage}/7 tiêu chí</td></tr>`).join('');
+    return `<div class="shared-fit-grid"><div class="shared-fit-card"><div class="shared-fit-head"><div><span>Phù hợp chiến lược SAVA /100 · Tự động</span><strong>${strategic.score===null?'—':fmt(strategic.score,1)+'/100'}</strong></div>${badge(strategic.label)}</div><p>Lấy từ rule chiến lược trong workbook Sourcing · <b>07_Market_Intel_Ref</b>. Đây là mức phù hợp với hướng Sourcing, không phải điểm Market Attractiveness.</p><div class="small linked-source">Nhóm: ${esc(strategic.group)} · Nguồn: ${esc(strategic.source)}</div></div><div class="shared-fit-card ${capability?.score===null?'empty-fit':''}"><div class="shared-fit-head"><div><span>Năng lực thực thi đã chứng minh /100</span><strong>${capability?.score===null?'—':fmt(capability.score,1)+'/100'}</strong></div><span class="badge blue">${capability?.count||0} Game/Candidate</span></div><p>${esc(capability?.method||'Chưa có dữ liệu')}. Đây là evidence từ Game Selection, dùng để biết SAVA đã có kinh nghiệm thực thi tương tự đến đâu.</p>${rows?table(['Game / Candidate','SAVA Publishing Fit','Dữ liệu'],rows,'shared-fit-table'):''}</div></div>`;
+  }
   function gameDerived(g){
     const s=g.scorecard||{};
     const market=weighted({size:s.marketSize,growth:s.growth,entry:s.entryAccess,mon:s.marketMonetization,ua:s.marketUaScalability},{size:20,growth:20,entry:25,mon:20,ua:15});
     const product=weighted({ua:s.uaTest,ret:s.retention,eng:s.engagement,mon:s.monetizationTest,gf:s.gamefeelTest},{ua:25,ret:30,eng:15,mon:20,gf:10});
-    const readiness=num(s.readiness), deal=num(s.dealEconomics), fit=num(s.savaFit);
+    const readiness=num(s.readiness), deal=num(s.dealEconomics), fit=gameSavaFitDerived(g).avg5;
     const prescan=[market,readiness,deal,fit].every(x=>x!==null)?Math.round((market*.45+readiness*20*.2+deal*20*.2+fit*20*.15)*10)/10:null;
     const final=[market,product,readiness,deal,fit].every(x=>x!==null)?Math.round((market*.25+product*.35+readiness*20*.15+deal*20*.15+fit*20*.10)*10)/10:null;
     const stage=product!==null?'POST-TEST':'PRE-SCAN';
@@ -402,7 +458,7 @@
   function render(){
     nav();
     if(!NAV.some(x=>x[0]===currentView)) currentView='dashboard';
-    ({dashboard:renderDashboard,partners:renderPartners,deals:renderDeals,market:renderMarket,games:renderGames,sourcing:renderSourcing,operations:renderOperations}[currentView]||renderDashboard)();
+    ({dashboard:renderDashboard,partners:renderPartners,deals:renderDeals,market:renderMarket,games:renderGames,sourcing:renderSourcing,operations:renderOperations,sources:renderSources}[currentView]||renderDashboard)();
     applyRoleUi();
   }
 
@@ -446,11 +502,14 @@
     const rows=db.partners.filter(p=>includesSearch(p.id,profile(p,'Tên Partner / Studio'),profile(p,'Genre chính'),profile(p,'Trạng thái'))).map(p=>{
       const d=partnerDerived(p),rs=partnerRiskStats(p.id),prod=d.productionPotential;
       const riskText=rs.open.length?`${rs.open.length} đang mở${rs.high.length?` · ${rs.high.length} cao`:''}`:'Không có risk mở';
-      const sava=profile(p,'Rev Share SAVA (%)'),partner=profile(p,'Rev Share Partner (%)');
+      const linkedDeals=(db.deals||[]).filter(x=>x.partnerId===p.id).map(dealInitialDefaults);
+      const linkedDeal=linkedDeals.sort((a,b)=>({'Đã ký':5,'Đang đàm phán':4,'Đánh giá pháp lý':3,'Đánh giá nội bộ':2,'Đang xác định phạm vi':1}[b.status]||0)-({'Đã ký':5,'Đang đàm phán':4,'Đánh giá pháp lý':3,'Đánh giá nội bộ':2,'Đang xác định phạm vi':1}[a.status]||0))[0]||null;
+      const dealView=linkedDeal?dealDerived(linkedDeal):null;
+      const sava=dealView?.modelRs??profile(p,'Rev Share SAVA (%)'),partner=dealView?.modelRs!==null&&dealView?.modelRs!==undefined?1-dealView.modelRs:profile(p,'Rev Share Partner (%)');
       const shareText=(num(sava)!==null||num(partner)!==null)?`${num(sava)!==null?pct(sava,0):'—'} / ${num(partner)!==null?pct(partner,0):'—'}`:'—';
       const nextFull=p.decision?.nextAction||p.scorecard?.nextAction||'—';
       const next=clipText(nextFull,72);
-      const uaCommit=profile(p,'Cam kết UA / Marketing Spend')||'—';
+      const uaCommit=linkedDeal&&dealNum(linkedDeal.uaBudgetMonthly)!==null?`${money(linkedDeal.uaBudgetMonthly)}/tháng`:profile(p,'Cam kết UA / Marketing Spend')||'—';
       const uaCondFull=profile(p,'Điều kiện cam kết UA')||'—';
       const uaCond=clipText(uaCondFull,62);
       const model=profile(p,'Mô hình hợp tác tài chính')||'—';
@@ -463,8 +522,8 @@
         <td>${scoreBar(prod.overall,{showLabel:true})}<div class="small muted maturity">${esc(prod.maturity)}</div></td>
         <td>${scoreBar(d.fit,{showLabel:true})}</td>
         <td class="commercial-cell" title="${esc(`${model} · ${fee}`)}"><b>${esc(model)}</b><div class="small muted ellipsis-2">${esc(fee)}</div></td>
-        <td class="nowrap share-cell"><b>${esc(shareText)}</b></td>
-        <td class="ua-cell" title="${esc(`${uaCommit} · ${uaCondFull}`)}"><b>${esc(uaCommit)}</b><div class="small muted ellipsis-2">${esc(uaCond)}</div></td>
+        <td class="nowrap share-cell"><b>${esc(shareText)}</b>${linkedDeal?'<div class="small linked-source">Từ Deal Making</div>':''}</td>
+        <td class="ua-cell" title="${esc(`${uaCommit} · ${uaCondFull}`)}"><b>${esc(uaCommit)}</b>${linkedDeal?'<div class="small linked-source">Từ Deal Making</div>':''}<div class="small muted ellipsis-2">${esc(uaCond)}</div></td>
         <td>${badge(riskText)}</td>
         <td>${badge(d.final)}</td>
         <td class="next-cell" title="${esc(nextFull)}">${esc(next)}</td>
@@ -541,7 +600,12 @@
     return n>=80?'Rất tốt':n>=65?'Tốt':n>=50?'Trung bình':'Thấp';
   }
   function marketDirection(x){
-    const score=num(x.score),fit=num(x.savaFit),trend=x.trend?.key||'na',mon=num(x.monetization);
+    // IMPORTANT: missing values must stay null. Number(null) === 0 would incorrectly
+    // treat an unfilled strategic fit as 0/100 and downgrade otherwise strong markets.
+    const score=(x.score===null||x.score===undefined||x.score==='')?null:Number(x.score);
+    const fit=(x.strategicFit===null||x.strategicFit===undefined||x.strategicFit==='')?null:Number(x.strategicFit);
+    const trend=x.trend?.key||'na';
+    const mon=(x.monetization===null||x.monetization===undefined||x.monetization==='')?null:Number(x.monetization);
     if(x.completeness<.34)return {key:'data',label:'Bổ sung dữ liệu',desc:'Chưa đủ dữ liệu thị trường để đưa ra định hướng đáng tin cậy.'};
 
     const declining=['decline','sharp-decline','rev-decline','user-decline'].includes(trend);
@@ -557,21 +621,21 @@
       return {key:'low',label:'Chưa ưu tiên',desc:'Xu hướng đang suy giảm và khả năng kiếm tiền chưa đủ mạnh; chưa nên dành nhiều nguồn lực.'};
     }
 
-    // 2) Mức cao nhất chỉ mở khi market tốt + trend khỏe + SAVA Fit đã được xác nhận.
+    // 2) Mức cao nhất chỉ mở khi market tốt + trend khỏe + phù hợp chiến lược SAVA đủ cao.
     if(score!==null&&score>=80&&fit!==null&&fit>=70&&strongTrend){
       return {key:'priority',label:'Ưu tiên tìm kiếm game/đối tác',desc:'Market hấp dẫn, xu hướng tăng khỏe và đã xác nhận phù hợp với SAVA. BD có thể chủ động tìm game/studio/partner trong nhóm này.'};
     }
 
-    // 3) Market đủ tốt để kiểm thử dù SAVA Fit chưa nhập. Thiếu SAVA Fit chỉ chặn mức "Ưu tiên tìm kiếm", không hạ xuống "Theo dõi thêm".
+    // 3) Market đủ tốt để kiểm thử khi nằm trong/tiệm cận hướng chiến lược; năng lực thực thi chưa có evidence không làm market bị loại.
     if(score!==null&&score>=70&&(
       positiveTrend||(trend==='stable'&&mon!==null&&mon>=75)||(splitTrend&&mon!==null&&mon>=65)
     )&&(fit===null||fit>=55)){
-      return {key:'test',label:'Ưu tiên kiểm thử',desc:'Tín hiệu market đủ tốt để ưu tiên test. Nếu SAVA Fit chưa nhập, dùng test để xác minh Product/Marketing Fit trước khi nâng lên mức chủ động tìm kiếm.'};
+      return {key:'test',label:'Ưu tiên kiểm thử',desc:'Tín hiệu market đủ tốt để ưu tiên test. Market đủ tốt và nằm trong/tiệm cận hướng chiến lược; dùng test để xác minh Product/Marketing Fit trước khi nâng lên mức chủ động tìm kiếm.'};
     }
 
     // 4) Tín hiệu tăng trưởng tích cực nhưng score chưa đủ 70 vẫn đáng theo dõi thay vì loại thẳng.
     if(score!==null&&score>=45&&(positiveTrend||splitTrend)){
-      return {key:'watch',label:'Theo dõi thêm',desc:'Xu hướng có tín hiệu tích cực nhưng sức hấp dẫn tổng thể chưa đủ để ưu tiên test; tiếp tục cập nhật quy mô, monetization, CPI và SAVA Fit.'};
+      return {key:'watch',label:'Theo dõi thêm',desc:'Xu hướng có tín hiệu tích cực nhưng sức hấp dẫn tổng thể chưa đủ để ưu tiên test; tiếp tục cập nhật quy mô, monetization, CPI và evidence thực thi.'};
     }
 
     if(score!==null&&score>=55){
@@ -591,11 +655,15 @@
       const growth=(dlMomentum!==null&&revMomentum!==null)?(dlMomentum+revMomentum)/2:null;
       const monetization=marketPctRank(rpd,rpdVals);
       const ua=marketPctRank(cpi,cpiVals,{inverse:true});
-      const savaFit=marketClamp100(m.SAVA_Fit_100??m.savaFit100??m.savaFit);
-      const parts=[['scale',scale,30],['growth',growth,25],['monetization',monetization,20],['ua',ua,15],['savaFit',savaFit,10]].filter(([,v])=>v!==null);
+      const strategicInfo=mechanicStrategicFit(m);
+      const capabilityInfo=mechanicCapabilityEvidence(m.Mechanic);
+      const strategicFit=strategicInfo.score;
+      // Market Attractiveness stays market-only. Source workbook weighting is Size 20 / Growth 20 / Entry 25 / Monetization 20 / UA 15.
+      // Entry Accessibility is not yet standardized in this Market view, so it is omitted rather than guessed and the remaining weights are re-normalized.
+      const parts=[['scale',scale,20],['growth',growth,20],['monetization',monetization,20],['ua',ua,15]].filter(([,v])=>v!==null);
       const observed=[dl,rev,dlg,revg,rpd,cpi].filter(x=>x!==null).length,completeness=observed/6,trend=marketTrendLabel(dlg,revg,scale);
       const weight=parts.reduce((a,x)=>a+x[2],0);const score=weight&&observed>=2?Math.round(parts.reduce((a,x)=>a+x[1]*x[2],0)/weight*10)/10:null;
-      const out={m,dl,rev,dlg,revg,rpd,cpi,scale,growth,monetization,ua,savaFit,score,completeness,trend};out.direction=marketDirection(out);return out;
+      const out={m,dl,rev,dlg,revg,rpd,cpi,scale,growth,monetization,ua,strategicFit,strategicInfo,capabilityFit:capabilityInfo.score,capabilityInfo,score,completeness,trend};out.direction=marketDirection(out);return out;
     });
   }
   function marketScoreBar(value){const n=num(value),w=n===null?0:Math.max(0,Math.min(100,n));const cls=n===null?'na':n>=80?'priority':n>=70?'pass':n>=55?'conditional':'review';return `<div class="market-score ${cls}" title="${n===null?'Chưa đủ dữ liệu':`${fmt(n,1)}/100`}"><strong>${n===null?'—':fmt(n,1)}</strong><span><i style="width:${w}%"></i></span></div>`;}
@@ -636,16 +704,16 @@
     const strongGrowth=insights.filter(x=>['breakout','growth-good','low-base'].includes(x.trend.key)).length;
     const strongMon=insights.filter(x=>x.monetization!==null&&x.monetization>=75).length;
     const uaReady=insights.filter(x=>x.ua!==null&&x.ua>=65).length;
-    const execRows=ranked.map(x=>{const m=x.m;const scaleLabel=marketBandLabel(x.scale,'scale'),monLabel=marketBandLabel(x.monetization,'mon'),uaLabel=marketBandLabel(x.ua,'ua');const scaleDetail=`DL ${marketNumCompact(x.dl)} · Rev ${marketMoneyCompact(x.rev)}`;const growthDetail=[x.dlg!==null?`DL ${pct(x.dlg,1)}`:null,x.revg!==null?`Rev ${pct(x.revg,1)}`:null].filter(Boolean).join(' · ')||'—';return `<tr><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button><div class="small muted">${esc(m.Geography||'—')} · ${esc(m.Platform||'—')}</div></td><td>${marketScoreBar(x.score)}</td><td><b>${esc(scaleLabel)}</b><div class="small muted">${esc(scaleDetail)}</div></td><td><span class="market-trend ${x.trend.key}" title="${esc(x.trend.detail||'')}">${esc(x.trend.label)}</span><div class="small muted">${esc(growthDetail)}</div></td><td><b>${esc(monLabel)}</b><div class="small muted">RPD ${x.rpd===null?'—':'$'+fmt(x.rpd,2)}</div></td><td><b>${x.cpi===null?'—':'$'+fmt(x.cpi,2)}</b><div class="small muted">${esc(uaLabel)}</div></td><td>${x.savaFit===null?'<span class="muted">Chưa nhập</span>':marketScoreBar(x.savaFit)}</td><td>${marketDirectionBadge(x)}</td></tr>`;});
+    const execRows=ranked.map(x=>{const m=x.m;const scaleLabel=marketBandLabel(x.scale,'scale'),monLabel=marketBandLabel(x.monetization,'mon'),uaLabel=marketBandLabel(x.ua,'ua');const scaleDetail=`DL ${marketNumCompact(x.dl)} · Rev ${marketMoneyCompact(x.rev)}`;const growthDetail=[x.dlg!==null?`DL ${pct(x.dlg,1)}`:null,x.revg!==null?`Rev ${pct(x.revg,1)}`:null].filter(Boolean).join(' · ')||'—';return `<tr><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button><div class="small muted">${esc(m.Geography||'—')} · ${esc(m.Platform||'—')}</div></td><td>${marketScoreBar(x.score)}</td><td><b>${esc(scaleLabel)}</b><div class="small muted">${esc(scaleDetail)}</div></td><td><span class="market-trend ${x.trend.key}" title="${esc(x.trend.detail||'')}">${esc(x.trend.label)}</span><div class="small muted">${esc(growthDetail)}</div></td><td><b>${esc(monLabel)}</b><div class="small muted">RPD ${x.rpd===null?'—':'$'+fmt(x.rpd,2)}</div></td><td><b>${x.cpi===null?'—':'$'+fmt(x.cpi,2)}</b><div class="small muted">${esc(uaLabel)}</div></td><td>${x.strategicFit===null?'<span class="muted">—</span>':marketScoreBar(x.strategicFit)}<div class="small linked-source">${esc(x.strategicInfo?.label||'—')}</div>${x.capabilityFit!==null?`<div class="small muted">Năng lực: ${fmt(x.capabilityFit,1)}/100 · ${x.capabilityInfo?.count||0} game</div>`:'<div class="small muted">Năng lực: chưa đủ data</div>'}</td><td>${marketDirectionBadge(x)}</td></tr>`;});
     const rawRows=mechanics.map(m=>`<tr><td>${esc(m.Mechanic_ID)}</td><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button></td><td>${esc(m.Geography||'—')}</td><td>${fmt(m.Downloads_30d,0)}</td><td>${money(m.Revenue_30d_USD)}</td><td>${m.DL_Growth_3m!==null&&m.DL_Growth_3m!==undefined?pct(m.DL_Growth_3m,1):'—'}</td><td>${m.Rev_Growth_3m!==null&&m.Rev_Growth_3m!==undefined?pct(m.Rev_Growth_3m,1):'—'}</td><td>${m.Revenue_per_Download_SAME_COHORT!==null&&m.Revenue_per_Download_SAME_COHORT!==undefined?'$'+fmt(m.Revenue_per_Download_SAME_COHORT,2):'—'}</td><td>${m.UA_Benchmark?.CPI_Median!==null&&m.UA_Benchmark?.CPI_Median!==undefined?'$'+fmt(m.UA_Benchmark.CPI_Median,2):'—'}</td></tr>`);
     const pubs=(db.publisherLandscape||[]).filter(x=>includesSearch(x.name,x.genres,x.testApproach,x.dealApproach)).map(x=>`<tr><td><button class="linkish" data-open-publisher="${x.id}">${esc(x.name)}</button></td><td>${esc(x.genres||'—')}</td><td>${esc(x.lookingFor||'—')}</td><td>${esc(x.testApproach||'—')}</td><td>${esc(x.investmentApproach||'—')}</td><td>${esc(x.dealApproach||'—')}</td><td>${esc(x.operationModel||'—')}</td></tr>`);
     const top=ranked.find(x=>x.score!==null),topGrowth=[...insights].filter(x=>x.growth!==null).sort((a,b)=>(b.growth??-1)-(a.growth??-1))[0];
     const executiveNote=`<div class="market-exec-note"><b>Đọc nhanh cho quyết định:</b> ${top?`Cơ hội tổng hợp cao nhất hiện tại là <strong>${esc(top.m.Mechanic)}</strong> (${fmt(top.score,1)}/100).`: 'Chưa đủ dữ liệu để xếp hạng.'} ${topGrowth?`Đà tăng trưởng tương đối nổi bật: <strong>${esc(topGrowth.m.Mechanic)}</strong> (${fmt(topGrowth.growth,0)}/100 · ${esc(topGrowth.trend.label)}).`:''}<span><b>Đà tăng trưởng /100</b> = xếp hạng tương đối của DL Growth 3M và Revenue Growth 3M theo tỷ trọng 50/50. <b>Khả năng kiếm tiền /100</b> = xếp hạng RPD so với các mechanic khác. 100 = thuộc nhóm tốt nhất trong tập dữ liệu, không phải % tăng trưởng thực tế.</span></div>`;
-    const formula=`<div class="market-formula"><span><b>30%</b> Quy mô</span><span><b>25%</b> Đà tăng trưởng</span><span><b>20%</b> Khả năng kiếm tiền</span><span><b>15%</b> UA</span><span><b>10%</b> Phù hợp SAVA</span><small><b>Đà tăng trưởng /100:</b> 50% xếp hạng DL Growth 3M + 50% xếp hạng Revenue Growth 3M. <b>Khả năng kiếm tiền /100:</b> percentile RPD trong tập mechanic. Nếu thiếu một trong hai Growth metric, phần Đà tăng trưởng được coi là chưa đủ dữ liệu và trọng số sẽ tự phân bổ lại.</small></div>`;
-    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('Ưu tiên tìm kiếm game/đối tác',priority,'Market tốt + xu hướng khỏe + SAVA Fit đã xác nhận')}${kpi('Tăng trưởng đồng thuận',strongGrowth,'DL & Revenue 3M cùng tăng ≥ 10%')}${kpi('Khả năng kiếm tiền nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
+    const formula=`<div class="market-formula"><span><b>Market-only</b> Sức hấp dẫn</span><span><b>20</b> Quy mô</span><span><b>20</b> Đà tăng trưởng</span><span><b>20</b> Khả năng kiếm tiền</span><span><b>15</b> UA</span><small>Điểm Sức hấp dẫn chỉ dùng dữ liệu thị trường. Trọng số gốc trong Game Selection là Size 20 · Growth 20 · Entry 25 · Monetization 20 · UA 15; view này chưa có Entry Accessibility chuẩn hóa nên <b>không tự suy diễn</b> và tự chuẩn hóa lại các phần còn dữ liệu. Phù hợp chiến lược SAVA được đọc riêng từ Sourcing, không cộng vào Market Score.</small></div>`;
+    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('Ưu tiên tìm kiếm game/đối tác',priority,'Market tốt + xu hướng khỏe + đúng hướng chiến lược SAVA')}${kpi('Tăng trưởng đồng thuận',strongGrowth,'DL & Revenue 3M cùng tăng ≥ 10%')}${kpi('Khả năng kiếm tiền nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
       ${executiveNote}
       <div class="market-chart-grid"><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">XẾP HẠNG</span><h3>Top Sức hấp dẫn thị trường /100</h3></div></div>${marketTopBars(insights)}</section><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">BẢN ĐỒ CƠ HỘI</span><h3>Đà tăng trưởng × Khả năng kiếm tiền</h3></div><small>Kích thước điểm ≈ quy mô tương đối · 100 = nhóm tốt nhất trong dataset</small></div>${marketScatter(insights)}<div class="market-chart-guide"><span><b>Trên phải:</b> tăng nhanh + kiếm tiền tốt</span><span><b>Trên trái:</b> kiếm tiền tốt, tăng chậm</span><span><b>Dưới phải:</b> tăng nhanh, kiếm tiền yếu</span><span><b>Dưới trái:</b> ưu tiên thấp</span></div></section></div>
-      ${panel('Định hướng thị trường',formula+table(['Thị trường / Mechanic','Sức hấp dẫn /100','Quy mô','Xu hướng 3M','Khả năng kiếm tiền','CPI','Phù hợp SAVA /100','Định hướng'],execRows,'market-exec-table'),'Bảng dành cho quyết định: click mechanic để xem / cập nhật dữ liệu chi tiết và nhập mức phù hợp với SAVA.')}
+      ${panel('Định hướng thị trường',formula+table(['Thị trường / Mechanic','Sức hấp dẫn /100','Quy mô','Xu hướng 3M','Khả năng kiếm tiền','CPI','Phù hợp chiến lược SAVA','Định hướng'],execRows,'market-exec-table'),'Bảng dành cho quyết định: Market Score là market-only. Phù hợp chiến lược lấy từ Sourcing; năng lực thực thi được đối chiếu từ Game Selection.')}
       ${panel('Bản đồ cơ hội SAVA',marketOpportunityMap(insights),'Phân nhóm tự động để Sếp nhìn nhanh nơi nên chủ động tìm game/đối tác, nơi nên kiểm thử, nơi cần theo dõi thêm hoặc chưa nên dành nhiều nguồn lực.')}
       ${panel('Publisher Landscape',pubs.length?table(['Publisher','Thể loại trọng tâm','Đang tìm gì','Cách test','Cách đầu tư','Cách deal','Cách vận hành'],pubs):'<div class="empty"><b>Chưa có dữ liệu Publisher Landscape riêng trong các file nguồn hiện tại.</b><br/>Team có thể bổ sung benchmark tại đây mà không trộn giả định vào dữ liệu thị trường gốc.</div>','Theo dõi publisher đang tìm game gì, cách họ test, đầu tư, deal và vận hành.',`<button class="primary" data-action="add-publisher">+ Publisher benchmark</button>`)}
       ${panel('Dữ liệu chi tiết',`<details class="market-raw-details"><summary>Xem bảng Market Economics + UA Benchmark (${mechanics.length} mechanics)</summary>${table(['ID','Mechanic','Geo','DL 30D','Revenue 30D','DL Growth 3M','Rev Growth 3M','RPD','CPI Median'],rawRows,'market-raw-table')}</details>`,'Dữ liệu gốc từ Market Economics + UA Benchmark; các tổng lịch sử có thể bị giới hạn coverage đúng như ghi chú trong workbook nguồn.')}`;
@@ -654,9 +722,9 @@
 
   function renderGames(){
     setHeader('Game Selection','4 · Market Fit + Product Fit + Marketing Fit + Business Potential');
-    const rows=db.games.filter(g=>includesSearch(g.id,intake(g,'Game_Title'),intake(g,'Studio'),intake(g,'Mechanic'),g.scorecard?.recommendation)).map(g=>{const d=gameDerived(g);return `<tr><td><button class="linkish" data-open-game="${g.id}">${g.id}</button></td><td><b>${esc(intake(g,'Game_Title'))}</b><div class="small muted">${esc(intake(g,'Studio')||'')}</div></td><td>${esc(intake(g,'Mechanic')||'—')}</td><td>${badge(intake(g,'Monetization_Model')||'—')}</td><td class="num">${d.market??g.scorecard?.marketScore??'—'}</td><td class="num">${d.prescan??g.scorecard?.preScanScore??'—'}</td><td class="num">${d.final??g.scorecard?.finalScore??'—'}</td><td>${badge(d.hard)}</td><td>${badge(d.recommendation)}</td><td><button class="ghost" data-open-game="${g.id}">Edit</button></td></tr>`;});
+    const rows=db.games.filter(g=>includesSearch(g.id,intake(g,'Game_Title'),intake(g,'Studio'),intake(g,'Mechanic'),g.scorecard?.recommendation)).map(g=>{const d=gameDerived(g),sf=gameSavaFitDerived(g);return `<tr><td><button class="linkish" data-open-game="${g.id}">${g.id}</button></td><td><b>${esc(intake(g,'Game_Title'))}</b><div class="small muted">${esc(intake(g,'Studio')||'')}</div></td><td>${esc(intake(g,'Mechanic')||'—')}</td><td>${badge(intake(g,'Monetization_Model')||'—')}</td><td>${sf.score===null?'—':marketScoreBar(sf.score)}</td><td class="num">${d.market??g.scorecard?.marketScore??'—'}</td><td class="num">${d.prescan??g.scorecard?.preScanScore??'—'}</td><td class="num">${d.final??g.scorecard?.finalScore??'—'}</td><td>${badge(d.hard)}</td><td>${badge(d.recommendation)}</td><td><button class="ghost" data-open-game="${g.id}">Edit</button></td></tr>`;});
     content.innerHTML=`<div class="grid kpis">${kpi('Candidates',db.games.length)}${kpi('Direct / proceed',db.games.filter(g=>/DIRECT|PROCEED|GREENLIGHT/.test(gameDerived(g).recommendation)).length)}${kpi('Pending gate',db.games.filter(g=>gameDerived(g).hard==='PENDING').length)}${kpi('Post-test',db.games.filter(g=>gameDerived(g).stage==='POST-TEST').length)}</div>
-      ${panel('Game decision pipeline',table(['ID','Game','Mechanic','Monetization','Market /100','Pre-Scan','Final','Gate','Recommendation',''],rows),'Preserves current workbook weighting and pre-scan/post-test separation.',`<button class="primary" data-action="add-game">+ Game</button>`)}
+      ${panel('Game decision pipeline',table(['ID','Game','Mechanic','Monetization','SAVA Fit /100','Market /100','Pre-Scan','Final','Gate','Recommendation',''],rows),'Preserves current workbook weighting and pre-scan/post-test separation.',`<button class="primary" data-action="add-game">+ Game</button>`)}
       ${panel('Current scoring logic',`<div class="three"><div class="rule-card"><h3>Pre-Scan</h3><p>Market <b>45%</b> · Publishing Readiness <b>20%</b> · Deal Economics <b>20%</b> · SAVA Fit <b>15%</b>.</p></div><div class="rule-card"><h3>Post-Test</h3><p>Market <b>25%</b> · Product Evidence <b>35%</b> · Readiness <b>15%</b> · Deal <b>15%</b> · SAVA Fit <b>10%</b>.</p></div><div class="rule-card"><h3>Decision thresholds</h3><p>Direct test <b>&gt;75</b> · conditional floor <b>60</b> · Greenlight <b>80</b> · Test-more floor <b>68</b> · completeness <b>80%</b>.</p></div></div>`,'Hard Gate FAIL always overrides score.')}`;
     bindOpeners();
   }
@@ -696,19 +764,36 @@
     const idx=STAGES.indexOf(sourcingCurrentStage(x)),target=STAGES.indexOf(stage);return idx>=target;
   }
   function sourcingMarketAlignment(x){
+    const linkedGame=byId(db.games,x?.gameId);
+    const mechanic=intake(linkedGame,'Mechanic')||x?.mechanic||'';
+    const exactName=mechanic||x?.genre||'';
+    const marketItem=(db.market||[]).find(m=>normalizeMechanicName(m.Mechanic)===normalizeMechanicName(exactName));
+    if(marketItem){
+      const insight=marketAnalytics(db.market||[]).find(z=>z.m.Mechanic_ID===marketItem.Mechanic_ID);
+      const strategic=mechanicStrategicFit(marketItem);
+      if(insight)return {group:strategic.group,label:strategic.label,score:strategic.score,source:'market',direction:insight.direction.key,marketDirection:insight.direction.label,attractiveness:insight.score,mechanic:marketItem.Mechanic};
+    }
     const g=String(x?.genre||'').toLowerCase();
-    if(!g)return {group:'Chưa xác định',label:'Chưa xác định',score:null};
-    if(g.includes('rpg')||/\btd\b/.test(g))return {group:'RPG / TD',label:'Cao — Đúng trọng tâm',score:100};
-    if(g.includes('simulation'))return {group:'Simulation',label:'Cao — Đúng trọng tâm',score:100};
-    if(g.includes('platform'))return {group:'Platform',label:'Cao — Đúng trọng tâm',score:100};
-    if(g.includes('puzzle')||g.includes('block blast'))return {group:'Puzzle',label:'Cao — Đúng trọng tâm',score:100};
-    if(g.includes('hybrid casual')||(g.includes('casual')&&!g.includes('hyper')))return {group:'Casual / Hybrid Casual',label:'Cao — Đúng trọng tâm',score:100};
-    if(g.includes('hyper')||g.includes('strategy'))return {group:'Hyper / Strategy liền kề',label:'Trung bình — Liền kề',score:60};
-    return {group:'Khác / Ngoài trọng tâm',label:'Thấp — Ngoài trọng tâm',score:20};
+    if(!g)return {group:'Chưa xác định',label:'Chưa xác định',score:null,source:'fallback'};
+    if(g.includes('rpg')||/\btd\b/.test(g))return {group:'RPG / TD',label:'Cao — Đúng trọng tâm',score:100,source:'fallback'};
+    if(g.includes('simulation'))return {group:'Simulation',label:'Cao — Đúng trọng tâm',score:100,source:'fallback'};
+    if(g.includes('platform'))return {group:'Platform',label:'Cao — Đúng trọng tâm',score:100,source:'fallback'};
+    if(g.includes('puzzle')||g.includes('block blast'))return {group:'Puzzle',label:'Cao — Đúng trọng tâm',score:100,source:'fallback'};
+    if(g.includes('hybrid casual')||(g.includes('casual')&&!g.includes('hyper')))return {group:'Casual / Hybrid Casual',label:'Cao — Đúng trọng tâm',score:100,source:'fallback'};
+    if(g.includes('hyper')||g.includes('strategy'))return {group:'Hyper / Strategy liền kề',label:'Trung bình — Liền kề',score:60,source:'fallback'};
+    return {group:'Khác / Ngoài trọng tâm',label:'Thấp — Ngoài trọng tâm',score:20,source:'fallback'};
   }
   function sourcingScreeningAction(x){
     const q=sourcingQualified(x),a=sourcingMarketAlignment(x);
     if(a.score===null)return 'Cần bổ sung Genre / mapping thị trường';
+    if(a.source==='market'){
+      if(q==='Không'&&['priority','test'].includes(a.direction))return 'Market tốt / game chưa qua Screening — loại hoặc xem lại Product Fit';
+      if(q==='Có'&&a.direction==='priority')return 'Ưu tiên — Qualified + Market ưu tiên tìm kiếm';
+      if(q==='Có'&&a.direction==='test')return 'Ưu tiên kiểm thử — Qualified + Market đủ tốt để test';
+      if(q==='Có'&&['selective','watch'].includes(a.direction))return 'Qualified — theo dõi chọn lọc / thêm evidence';
+      if(q==='Không')return 'Giảm ưu tiên — Screening không đạt';
+      return 'Chờ Screening';
+    }
     if(a.score===100&&q==='Có')return 'Ưu tiên — đúng hướng & Qualified';
     if(a.score===100&&q==='Không')return 'Đúng thị trường / game yếu — loại';
     if(a.score===60&&q==='Có')return 'Ngoại lệ — Qualified, hướng liền kề';
@@ -738,7 +823,7 @@
     const bottleneck=bottlenecks[0];
     const avgTransitions=[['Lead → Qualified','leadDate','qualifiedDate',14],['Qualified → Evaluation','qualifiedDate','evaluationDate',10],['Evaluation → Deal','evaluationDate','dealDate',30],['Deal → Test','dealDate','testDate',21],['Test → Launch','testDate','launchDate',30],['Launch → Scale','launchDate','scaleDate',30]];
     const speedRows=avgTransitions.map(([label,a,b,sla])=>{const avg=sourcingTransitionAvg(all,a,b);return `<tr><td>${esc(label)}</td><td class="num">${avg===null?'—':fmt(avg,1)+' ngày'}</td><td class="num">${sla} ngày</td><td>${avg===null?badge('Chưa có dữ liệu'):avg>sla?'<span class="badge bad">CHẬM</span>':'<span class="badge good">OK</span>'}</td></tr>`;});
-    const activeRows=items.filter(x=>sourcingStatus(x)==='Đang xử lý').sort((a,b)=>Number(sourcingPipelineAlert(b)==='STUCK')-Number(sourcingPipelineAlert(a)==='STUCK')||Number(sourcingOverdue(b))-Number(sourcingOverdue(a))).slice(0,25).map(x=>{const stage=sourcingCurrentStage(x),days=sourcingDaysInStage(x),align=sourcingMarketAlignment(x),alert=sourcingPipelineAlert(x);return `<tr><td><button class="linkish" data-open-sourcing="${esc(x.id)}">${esc(x.id)}</button></td><td><b>${esc(x.game||x.leadName||'—')}</b><div class="small muted">${esc(x.studio||'')}</div></td><td>${esc(x.source||'—')}</td><td>${esc(x.owner||'Chưa có')}</td><td>${badge(stage)}</td><td>${days===null?'—':`${days} / ${SOURCING_SLA[stage]??'—'} ngày`}</td><td>${alert==='STUCK'?'<span class="badge bad">STUCK</span>':badge(alert)}</td><td><b>${esc(align.label)}</b><div class="small muted">${align.score===null?'—':align.score+'/100'}</div></td><td>${esc(clipText(x.nextAction||'—',90))}<div class="small ${sourcingOverdue(x)?'danger-text':'muted'}">${x.actionDeadline?sourcingOverdue(x)?'Quá hạn · '+esc(x.actionDeadline):'Hạn '+esc(x.actionDeadline):'Chưa có deadline'}</div></td><td><button class="ghost" data-open-sourcing="${esc(x.id)}">Edit</button></td></tr>`;});
+    const activeRows=items.filter(x=>sourcingStatus(x)==='Đang xử lý').sort((a,b)=>Number(sourcingPipelineAlert(b)==='STUCK')-Number(sourcingPipelineAlert(a)==='STUCK')||Number(sourcingOverdue(b))-Number(sourcingOverdue(a))).slice(0,25).map(x=>{const stage=sourcingCurrentStage(x),days=sourcingDaysInStage(x),align=sourcingMarketAlignment(x),alert=sourcingPipelineAlert(x);return `<tr><td><button class="linkish" data-open-sourcing="${esc(x.id)}">${esc(x.id)}</button></td><td><b>${esc(x.game||x.leadName||'—')}</b><div class="small muted">${esc(x.studio||'')}</div></td><td>${esc(x.source||'—')}</td><td>${esc(x.owner||'Chưa có')}</td><td>${badge(stage)}</td><td>${days===null?'—':`${days} / ${SOURCING_SLA[stage]??'—'} ngày`}</td><td>${alert==='STUCK'?'<span class="badge bad">STUCK</span>':badge(alert)}</td><td><b>${esc(align.label)}</b><div class="small muted">${align.score===null?'—':align.score+'/100'}${align.marketDirection?` · MI: ${esc(align.marketDirection)}${align.attractiveness!==null&&align.attractiveness!==undefined?' '+fmt(align.attractiveness,0)+'/100':''}`:''}</div></td><td>${esc(clipText(x.nextAction||'—',90))}<div class="small ${sourcingOverdue(x)?'danger-text':'muted'}">${x.actionDeadline?sourcingOverdue(x)?'Quá hạn · '+esc(x.actionDeadline):'Hạn '+esc(x.actionDeadline):'Chưa có deadline'}</div></td><td><button class="ghost" data-open-sourcing="${esc(x.id)}">Edit</button></td></tr>`;});
     const pipelineRows=items.slice(0,250).map(x=>{const align=sourcingMarketAlignment(x);return `<tr><td><button class="linkish" data-open-sourcing="${esc(x.id)}">${esc(x.id)}</button></td><td>${esc(x.game||x.leadName||'—')}<div class="small muted">${esc(x.studio||'')}</div></td><td>${esc(x.genre||'—')}</td><td>${esc(x.screeningResult||'Chưa Screening')}</td><td>${badge(sourcingQualified(x))}</td><td>${badge(sourcingCurrentStage(x))}</td><td>${badge(sourcingStatus(x))}</td><td>${esc(align.label)}</td><td>${esc(x.source||'—')}</td><td>${esc(x.owner||'—')}</td><td>${esc(clipText(x.nextAction||'—',85))}</td></tr>`;});
     const sourceGroups={};all.forEach(x=>{const k=x.source||'Chưa có nguồn';(sourceGroups[k]||(sourceGroups[k]=[])).push(x)});
     const sourceRows=Object.entries(sourceGroups).map(([source,list])=>{const c=Object.fromEntries(STAGES.map(st=>[st,list.filter(x=>sourcingReached(x,st)).length]));return `<tr><td>${esc(source)}</td><td class="num">${list.length}</td><td class="num">${c.Qualified}</td><td class="num">${c.Deal}</td><td class="num">${c.Test}</td><td class="num">${c.Launch}</td><td class="num">${c.Scale}</td><td class="num">${list.length?pct(c.Qualified/list.length,1):'—'}</td><td class="num">${c.Deal?pct(c.Test/c.Deal,1):'—'}</td><td class="num">${list.length?pct(c.Scale/list.length,1):'—'}</td></tr>`;});
@@ -752,10 +837,41 @@
       <div class="sourcing-two-col">${panel('Chất lượng Screening',`<div class="sourcing-quality">${sourcingBarRows(screeningDist,screened.length||1)}</div><div class="sourcing-summary-line"><span><b>Tỷ lệ Test đạt:</b> ${testPass===null?'—':pct(testPass,1)}</span><span><b>Lead → Scale:</b> ${all.length?pct(passed.Scale/all.length,2):'—'}</span></div>`,'Screening quyết định Qualified. Dữ liệu lịch sử có Screening được tính vào Lead/Qualified/Evaluation.')}${panel('Điểm nghẽn & Tốc độ',`<div class="bottleneck-card"><span>Điểm nghẽn chính</span><strong>${esc(bottleneck?.label||'Chưa đủ dữ liệu')}</strong><b>${bottleneck?.rate===null||bottleneck?.rate===undefined?'—':pct(bottleneck.rate,1)}</b></div>${table(['Chuyển giai đoạn','Số ngày TB','SLA','Đánh giá'],speedRows)}`,'Chỉ tính tốc độ với case có đủ ngày chuyển giai đoạn; dữ liệu lịch sử thiếu ngày không bị đưa vào average.')}</div>
       ${panel('Pipeline cần hành động',activeRows.length?table(['ID','Game / Studio','Nguồn','BD','Giai đoạn','Ngày / SLA','Cảnh báo','Phù hợp thị trường','Hành động tiếp theo',''],activeRows,'sourcing-action-table'):'<div class="empty">Chưa có Lead đang xử lý phù hợp bộ lọc.</div>','Ưu tiên xử lý STUCK và Hành động tiếp theo quá hạn.',`<button class="primary" data-action="add-sourcing">+ Lead</button>`)}
       <div class="sourcing-two-col">${panel('Hiệu quả theo nguồn',sourceRows.length?table(['Nguồn','Lead','Qualified','Deal','Test','Launch','Scale','Lead→Qualified','Deal→Test','Scale/Lead'],sourceRows,'sourcing-source-table'):'<div class="empty">Chưa có dữ liệu nguồn.</div>','So sánh chất lượng nguồn Sourcing thay vì chỉ so Lead volume.')}${panel('Hiệu quả BD',bdRows.length?table(['BD phụ trách','Lead','Qualified','Deal','Test','Launch','Scale','Lead→Deal','Lead→Scale','STUCK'],bdRows,'sourcing-bd-table'):'<div class="empty">Dữ liệu lịch sử chưa có BD phụ trách; KPI này sẽ đầy dần từ dữ liệu vận hành mới.</div>','BD được đánh giá theo chuyển đổi, tốc độ và kết quả; không chỉ số Lead.')}</div>
-      <div class="sourcing-two-col">${panel('Lý do loại',lossTotal?sourcingBarRows(lossMap,lossTotal):'<div class="empty">Dữ liệu lịch sử chưa có lý do loại chi tiết. BD nên chọn lý do khi đóng Lead.</div>','Review hàng tháng để biết Lead fail vì Product, Market, Team hay Deal.')}${panel('Mức phù hợp với định hướng thị trường',sourcingBarRows(alignMap,alignTotal||1),'Đây là độ khớp với hướng Sourcing hiện hành, KHÔNG phải Sức hấp dẫn thị trường /100 và không thay thế Screening.')}</div>
+      <div class="sourcing-two-col">${panel('Lý do loại',lossTotal?sourcingBarRows(lossMap,lossTotal):'<div class="empty">Dữ liệu lịch sử chưa có lý do loại chi tiết. BD nên chọn lý do khi đóng Lead.</div>','Review hàng tháng để biết Lead fail vì Product, Market, Team hay Deal.')}${panel('Mức phù hợp với định hướng thị trường',sourcingBarRows(alignMap,alignTotal||1),'Nếu Lead đã link Game hoặc khớp chính xác Mechanic, hệ thống lấy trực tiếp Định hướng + Sức hấp dẫn từ Market Intelligence; nếu chưa map được thì mới dùng nhóm chiến lược fallback. Không thay thế Screening.')}</div>
       ${panel('Nguyên tắc vận hành',guide,'Nguồn: workbook SAVA Sourcing Funnel & KPI. Review Funnel hàng tuần; review Nguồn / Lý do loại / Điểm nghẽn hàng tháng.')}
       ${panel('Toàn bộ Pipeline',`<details class="market-raw-details"><summary>Xem ${items.length} Lead theo bộ lọc hiện tại</summary>${table(['Lead ID','Game / Studio','Genre','Screening','Qualified','Giai đoạn','Trạng thái','Phù hợp thị trường','Nguồn','BD','Hành động'],pipelineRows,'sourcing-pipeline-table')}</details>`,'Các Lead lịch sử thiếu ngày/người phụ trách vẫn được giữ để tính chất lượng Screening, nhưng không dùng để suy diễn tốc độ.')}`;
     bindOpeners();
+  }
+
+  function sourceStatusLabel(meta){
+    if(sourceStorageState.loading)return '<span class="badge warn">Đang kiểm tra…</span>';
+    if(sourceStorageState.error)return '<span class="badge bad">Chưa cấu hình Storage</span>';
+    return sourceStorageState.files?.[meta.storagePath]?'<span class="badge good">Đã lưu riêng tư</span>':'<span class="badge warn">Chưa upload</span>';
+  }
+  function renderSources(){
+    setHeader('Tài liệu nguồn','One Source of Truth · File Excel gốc + data lineage');
+    const canUpload=window.SAVA_SUPABASE?.configured&&window.SAVA_SUPABASE.getRole?.()==='admin';
+    const cards=SOURCE_WORKBOOKS.map(meta=>`<article class="source-file-card"><div class="source-file-top"><div><span class="source-file-type">${esc(meta.type)}</span><h3>${esc(meta.module)}</h3></div>${sourceStatusLabel(meta)}</div><p class="source-file-name">${esc(meta.name)}</p><div class="source-file-stats"><span><b>${meta.sheets}</b> sheets</span><span><b>${meta.formulas.toLocaleString('en-US')}</b> formulas</span><span><b>Owner:</b> ${esc(meta.owner)}</span></div><p>${esc(meta.note)}</p><div class="source-file-actions"><button class="ghost" data-source-download="${meta.id}" ${sourceStorageState.files?.[meta.storagePath]?'':'disabled'}>↓ Tải file Excel gốc</button>${canUpload?`<button class="ghost" data-source-upload="${meta.id}">${sourceStorageState.files?.[meta.storagePath]?'Thay file nguồn':'Upload file nguồn'}</button>`:''}</div></article>`).join('');
+    const mapRows=[
+      ['Partner Selection','Partner profile · Hard Gate · Evidence · Partner Fit · Risk · Decision','Các module khác chỉ đọc Partner ID / Fit / Risk / Deal summary'],
+      ['Game Selection','Candidate intake · Product/Market score · SAVA Publishing Fit','Market dùng làm evidence năng lực; Sourcing/Deal/Operation link theo Game ID'],
+      ['Market Intelligence','Market economics · Growth · RPD · CPI · taxonomy mechanic','Sourcing đọc Định hướng/Market evidence; Game Selection đọc Market inputs'],
+      ['Deal Making','RS · MG/đầu tư · UA commitment · Recoup · negotiation · milestone · exit','Partner/Operation chỉ hiển thị lại Deal đã link; không nhập lại'],
+      ['Sourcing','Stage Funnel · Screening · SLA · strategic direction fit 100/60/20','Tham chiếu Partner/Game/Market; không thay thế score của các module nguồn'],
+      ['Publishing Operation','Post-deal SOP · Product Test · Monetization · Expansion · Scale gate','Nhận Game/Partner/Deal đã chốt và phản hồi performance thực tế về hệ thống']
+    ].map(r=>`<tr>${r.map((x,i)=>`<td${i===0?'><b>':'>'}${esc(x)}${i===0?'</b>':''}</td>`).join('')}</tr>`);
+    content.innerHTML=`<div class="notice"><b>Nguyên tắc:</b> mỗi dữ liệu chỉ có một module sở hữu. Các tab khác đọc lại bằng ID/link thay vì nhập lại. File Excel trong mục này được lưu ở <b>Supabase Storage private</b>, không nằm trong GitHub Pages public.</div><div class="source-files-grid">${cards}</div>${panel('Bản đồ nguồn dữ liệu',table(['Module sở hữu','Dữ liệu gốc','Cách module khác sử dụng'],mapRows,'source-map-table'),'Đây là rule nền để tránh nhập trùng và tránh hai tab cho ra hai giá trị khác nhau.')}${panel('Luồng dữ liệu chung',`<div class="source-flow"><span>Market Intelligence</span><b>→</b><span>Sourcing</span><b>→</b><span>Partner + Game Selection</span><b>→</b><span>Deal Making</span><b>→</b><span>Publishing Operation</span><b>↺</b><span>Performance feedback</span></div>`,'Performance thực tế sau Test/Launch/Scale phải quay lại làm evidence cho Game, Partner và Market thay vì tạo một bộ dữ liệu tách rời.')}`;
+    bindSourceActions();
+    if(window.SAVA_SUPABASE?.configured&&!sourceStorageState.loaded&&!sourceStorageState.loading)refreshSourceStorage();
+  }
+  function bindSourceActions(){
+    document.querySelectorAll('[data-source-download]').forEach(btn=>btn.onclick=async()=>{const meta=SOURCE_WORKBOOKS.find(x=>x.id===btn.dataset.sourceDownload);if(!meta)return;btn.disabled=true;try{await window.SAVA_SUPABASE.downloadSourceFile(meta.storagePath,meta.name);toast('Đã tải file Excel gốc');}catch(e){console.error(e);toast(`Tải file thất bại: ${e.message}`);}finally{btn.disabled=false;}});
+    document.querySelectorAll('[data-source-upload]').forEach(btn=>btn.onclick=()=>{const meta=SOURCE_WORKBOOKS.find(x=>x.id===btn.dataset.sourceUpload);if(!meta)return;const input=document.createElement('input');input.type='file';input.accept=meta.type==='XLSM'?'.xlsm':'.xlsx';input.onchange=async()=>{const file=input.files?.[0];if(!file)return;btn.disabled=true;try{await window.SAVA_SUPABASE.uploadSourceFile(meta.storagePath,file);toast(`Đã lưu ${meta.module} vào kho riêng tư`);sourceStorageState.loaded=false;await refreshSourceStorage();}catch(e){console.error(e);toast(`Upload thất bại: ${e.message}`);}finally{btn.disabled=false;}};input.click();});
+  }
+  async function refreshSourceStorage(){
+    if(!window.SAVA_SUPABASE?.configured||!window.SAVA_SUPABASE.listSourceFiles)return;
+    sourceStorageState.loading=true;sourceStorageState.error='';if(currentView==='sources')renderSources();
+    try{const list=await window.SAVA_SUPABASE.listSourceFiles();sourceStorageState.files=Object.fromEntries((list||[]).map(x=>[x.name,x]));sourceStorageState.loaded=true;}catch(e){sourceStorageState.error=e.message;console.error(e);}finally{sourceStorageState.loading=false;if(currentView==='sources')renderSources();}
   }
 
   function renderOperations(){
@@ -1085,20 +1201,21 @@
       <details open><summary>Rule 3 · Định hướng cho SAVA được quyết định như thế nào?</summary><div class="market-rule-body"><table class="market-rule-table"><thead><tr><th>Điều kiện chính</th><th>Định hướng</th><th>Ý nghĩa hành động</th></tr></thead><tbody>
         <tr><td>Dữ liệu thị trường quá thiếu</td><td><b>Bổ sung dữ liệu</b></td><td>Chưa kết luận; cần hoàn thiện benchmark.</td></tr>
         <tr><td>Xu hướng suy giảm + Khả năng kiếm tiền ≥60/100</td><td><b>Theo dõi chọn lọc</b></td><td>Market có thể trưởng thành/niche nhưng vẫn monetize tốt; chỉ xem xét game/partner chất lượng cao, không tìm kiếm đại trà.</td></tr>
-        <tr><td>Sức hấp dẫn ≥80 + Phù hợp SAVA ≥70 + Bứt phá/Tăng trưởng tốt</td><td><b>Ưu tiên tìm kiếm game/đối tác</b></td><td>BD chủ động tìm game/studio/partner trong mechanic này.</td></tr>
-        <tr><td>Sức hấp dẫn ≥70 + tín hiệu tích cực; SAVA Fit chưa nhập hoặc ≥55</td><td><b>Ưu tiên kiểm thử</b></td><td>Market đủ tốt để test. Chưa nhập SAVA Fit không làm market bị hạ xuống Theo dõi thêm; test là bước xác minh trước khi nâng lên chủ động tìm kiếm.</td></tr>
+        <tr><td>Sức hấp dẫn ≥80 + Phù hợp chiến lược SAVA ≥70 + Bứt phá/Tăng trưởng tốt</td><td><b>Ưu tiên tìm kiếm game/đối tác</b></td><td>BD chủ động tìm game/studio/partner trong mechanic này.</td></tr>
+        <tr><td>Sức hấp dẫn ≥70 + tín hiệu tích cực; Phù hợp chiến lược SAVA ≥60</td><td><b>Ưu tiên kiểm thử</b></td><td>Market đủ tốt để test. Phù hợp chiến lược lấy từ Sourcing; test là bước xác minh Product/Marketing Fit trước khi nâng lên chủ động tìm kiếm.</td></tr>
         <tr><td>Sức hấp dẫn 45–69.9 + Bứt phá/Tăng trưởng tốt/Tăng mạnh từ nền thấp/Mở rộng user/Tăng trưởng doanh thu</td><td><b>Theo dõi thêm</b></td><td>Trend có tín hiệu tích cực nhưng economics tổng thể chưa đủ mạnh để ưu tiên test.</td></tr>
         <tr><td>Sức hấp dẫn ≥55 nhưng tín hiệu chưa đủ mạnh/đồng thuận</td><td><b>Theo dõi thêm</b></td><td>Tiếp tục quan sát market và cập nhật dữ liệu.</td></tr>
         <tr><td>Xu hướng suy giảm + kiếm tiền yếu, hoặc sức hấp dẫn thấp và không có tín hiệu tăng trưởng đáng kể</td><td><b>Chưa ưu tiên</b></td><td>Chưa nên dành nhiều nguồn lực.</td></tr>
-      </tbody></table><p class="small muted"><b>Sức hấp dẫn /100</b> hiện dùng: Quy mô 30% · Đà tăng trưởng 25% · Khả năng kiếm tiền 20% · UA 15% · Phù hợp SAVA 10%. Metric thiếu được bỏ khỏi mẫu số và trọng số còn lại tự chuẩn hóa.</p></div></details>
+      </tbody></table><p class="small muted"><b>Sức hấp dẫn /100</b> là market-only: Size 20 · Growth 20 · Monetization 20 · UA 15; Entry Accessibility 25 chưa được chấm nếu view này thiếu dữ liệu chuẩn hóa, và các trọng số còn lại được tự chuẩn hóa. <b>Phù hợp chiến lược SAVA</b> lấy từ Sourcing · 07_Market_Intel_Ref (100 / 60 / 20). <b>Năng lực thực thi đã chứng minh</b> lấy từ SAVA Publishing Fit của các Game/Candidate cùng mechanic trong Game Selection. Hai khái niệm này được hiển thị riêng và không cộng vào Market Attractiveness.</p></div></details>
     </div>`;
   }
 
   function openMarket(id){
     const m=(db.market||[]).find(x=>x.Mechanic_ID===id);if(!m)return;
     const currentInsight=marketAnalytics(db.market||[]).find(x=>x.m.Mechanic_ID===id);
-    const body=`<div class="notice"><b>Hướng dẫn BD:</b> nhập/cập nhật dữ liệu benchmark ở phần dưới. Các nhãn Xu hướng 3M, Khả năng kiếm tiền /100 và Định hướng được hệ thống tự tính theo rule bên dưới; không nhập tay các kết luận này.</div>${marketEditGuideHtml(currentInsight)}<div class="section-title">Dữ liệu thị trường</div><div class="form-grid three-cols">${fText('name','Mechanic',m.Mechanic)}${fText('geo','Geography',m.Geography)}${fText('platform','Platform',m.Platform)}${fText('dl30','Downloads 30d',m.Downloads_30d??'','','number')}${fText('dl90','Downloads 90d',m.Downloads_90d??'','','number')}${fText('dl12','Downloads 12m',m.Downloads_12m??'','','number')}${fText('rev30','Revenue 30d USD',m.Revenue_30d_USD??'','','number')}${fText('rev90','Revenue 90d USD',m.Revenue_90d_USD??'','','number')}${fText('rev12','Revenue 12m USD',m.Revenue_12m_USD??'','','number')}${fText('dlg3','Tăng trưởng DL 3M (decimal)',m.DL_Growth_3m??'','','number')}${fText('revg3','Tăng trưởng Revenue 3M (decimal)',m.Rev_Growth_3m??'','','number')}${fText('rpd','RPD (Revenue / Download)',m.Revenue_per_Download_SAME_COHORT??'','','number')}${fText('cpi','CPI median',m.UA_Benchmark?.CPI_Median??'','','number')}</div><div class="section-title">Định hướng SAVA</div><div class="form-grid">${fText('savaFit','Phù hợp SAVA /100',m.SAVA_Fit_100??'','','number')}${fArea('savaNote','Ghi chú định hướng / lý do',m.SAVA_Direction_Note||'')}</div>`;
-    modal(`${id} · ${m.Mechanic}`,body,(root)=>{m.Mechanic=formVal(root,'name');m.Geography=formVal(root,'geo');m.Platform=formVal(root,'platform');m.Downloads_30d=formNum(root,'dl30');m.Downloads_90d=formNum(root,'dl90');m.Downloads_12m=formNum(root,'dl12');m.Revenue_30d_USD=formNum(root,'rev30');m.Revenue_90d_USD=formNum(root,'rev90');m.Revenue_12m_USD=formNum(root,'rev12');m.DL_Growth_3m=formNum(root,'dlg3');m.Rev_Growth_3m=formNum(root,'revg3');m.Revenue_per_Download_SAME_COHORT=formNum(root,'rpd');m.UA_Benchmark=m.UA_Benchmark||{};m.UA_Benchmark.CPI_Median=formNum(root,'cpi');m.SAVA_Fit_100=formNum(root,'savaFit');m.SAVA_Direction_Note=formVal(root,'savaNote');modalRoot.innerHTML='';persist(`Updated market mechanic ${id}`);},{wide:true});
+    const capabilityInfo=mechanicCapabilityEvidence(m.Mechanic);
+    const body=`<div class="notice"><b>Hướng dẫn BD:</b> chỉ cập nhật benchmark thị trường và ghi chú. Xu hướng 3M, Khả năng kiếm tiền, Sức hấp dẫn và Định hướng đều tự tính. <b>Phù hợp chiến lược</b> lấy từ Sourcing; <b>Năng lực thực thi</b> lấy từ Game Selection — không nhập lại.</div>${marketEditGuideHtml(currentInsight)}<div class="section-title">Dữ liệu dùng chung trong Publishing OS</div>${mechanicSharedFitHtml(m,capabilityInfo)}<div class="section-title">Dữ liệu thị trường</div><div class="form-grid three-cols">${fText('name','Mechanic',m.Mechanic)}${fText('geo','Geography',m.Geography)}${fText('platform','Platform',m.Platform)}${fText('dl30','Downloads 30d',m.Downloads_30d??'','','number')}${fText('dl90','Downloads 90d',m.Downloads_90d??'','','number')}${fText('dl12','Downloads 12m',m.Downloads_12m??'','','number')}${fText('rev30','Revenue 30d USD',m.Revenue_30d_USD??'','','number')}${fText('rev90','Revenue 90d USD',m.Revenue_90d_USD??'','','number')}${fText('rev12','Revenue 12m USD',m.Revenue_12m_USD??'','','number')}${fText('dlg3','Tăng trưởng DL 3M (decimal)',m.DL_Growth_3m??'','','number')}${fText('revg3','Tăng trưởng Revenue 3M (decimal)',m.Rev_Growth_3m??'','','number')}${fText('rpd','RPD (Revenue / Download)',m.Revenue_per_Download_SAME_COHORT??'','','number')}${fText('cpi','CPI median',m.UA_Benchmark?.CPI_Median??'','','number')}</div><div class="section-title">Ghi chú định hướng</div><div class="form-grid">${fArea('savaNote','Ghi chú / bối cảnh bổ sung',m.SAVA_Direction_Note||'')}</div>`;
+    modal(`${id} · ${m.Mechanic}`,body,(root)=>{m.Mechanic=formVal(root,'name');m.Geography=formVal(root,'geo');m.Platform=formVal(root,'platform');m.Downloads_30d=formNum(root,'dl30');m.Downloads_90d=formNum(root,'dl90');m.Downloads_12m=formNum(root,'dl12');m.Revenue_30d_USD=formNum(root,'rev30');m.Revenue_90d_USD=formNum(root,'rev90');m.Revenue_12m_USD=formNum(root,'rev12');m.DL_Growth_3m=formNum(root,'dlg3');m.Rev_Growth_3m=formNum(root,'revg3');m.Revenue_per_Download_SAME_COHORT=formNum(root,'rpd');m.UA_Benchmark=m.UA_Benchmark||{};m.UA_Benchmark.CPI_Median=formNum(root,'cpi');m.SAVA_Direction_Note=formVal(root,'savaNote');modalRoot.innerHTML='';persist(`Updated market mechanic ${id}`);},{wide:true});
   }
 
   function openPublisher(id){
@@ -1113,13 +1230,14 @@
       <div class="section-title">Candidate</div><div class="form-grid three-cols">${fText('id','Candidate ID',g.id)}${fText('title','Game title',intake(g,'Game_Title'))}${fText('studio','Studio',intake(g,'Studio'))}${fText('mechanic','Mechanic',intake(g,'Mechanic'))}${fText('archetype','Gamefeel archetype',intake(g,'Gamefeel_Archetype'))}${fText('theme','Theme / hook',intake(g,'Theme_Hook'))}${fText('geo','Target GEO',intake(g,'Target_GEO'))}${fSelect('monModel','Monetization',intake(g,'Monetization_Model')||'', ['', 'Hybrid IAP','Hybrid IAA'])}${fText('stage','Build stage',intake(g,'Build_Stage'))}${fText('buildUrl','Build URL',intake(g,'Build_URL'))}${fText('storeUrl','Store URL',intake(g,'Store_URL'))}${fText('owner','Owner',intake(g,'Owner'))}</div>
       <div class="section-title">Hard Gate</div><div class="form-grid three-cols">${[['legal','Gate_Legal_IP','Legal / IP'],['build','Gate_Build_Playable','Playable build'],['tracking','Gate_Tracking_Access','Tracking access'],['store','Gate_Store_Compliance','Store compliance'],['commercial','Gate_Commercial_Terms','Commercial terms'],['rights','Gate_Rights_Confirmed','Rights confirmed']].map(([n,k,l])=>fSelect(`gate_${n}`,l,intake(g,k)||'PENDING',GAME_GATE_STATUS)).join('')}</div>
       <div class="section-title">Market score 1–5</div><div class="form-grid three-cols">${fText('marketSize','Market Size',g.scorecard?.marketSize??'','','number')}${fText('growth','Growth / Momentum',g.scorecard?.growth??'','','number')}${fText('entry','Entry Accessibility',g.scorecard?.entryAccess??'','','number')}${fText('marketMon','Market Monetization',g.scorecard?.marketMonetization??'','','number')}${fText('marketUa','UA / Creative Scalability',g.scorecard?.marketUaScalability??'','','number')}</div>
-      <div class="section-title">Publishing / deal / fit 1–5</div><div class="form-grid three-cols">${fText('readiness','Publishing Readiness',g.scorecard?.readiness??'','','number')}${fText('deal','Deal Economics',g.scorecard?.dealEconomics??'','','number')}${fText('savaFit','SAVA Publishing Fit',g.scorecard?.savaFit??'','','number')}${fText('completeness','Data completeness 0-1',g.scorecard?.dataCompleteness??'','','number')}${fText('evidenceQ','Evidence Quality 1-5',g.scorecard?.evidenceQuality??'','','number')}</div>
+      <div class="section-title">Publishing / Deal</div><div class="form-grid three-cols">${fText('readiness','Publishing Readiness',g.scorecard?.readiness??'','','number')}${fText('deal','Deal Economics',g.scorecard?.dealEconomics??'','','number')}${fText('completeness','Data completeness 0-1',g.scorecard?.dataCompleteness??'','','number')}${fText('evidenceQ','Evidence Quality 1-5',g.scorecard?.evidenceQuality??'','','number')}</div>
+      <div class="section-title">SAVA Publishing Fit · Dữ liệu dùng chung</div><div class="notice"><b>Điểm tự động:</b> ${gameSavaFitDerived(g).score===null?'Chưa đủ dữ liệu':fmt(gameSavaFitDerived(g).score,1)+'/100'} · Công thức nguồn: trung bình 7 tiêu chí bên dưới (1–5) × 20. Điểm này được Game Selection sử dụng trong Pre-Scan/Post-Test và Market Intelligence tự tổng hợp theo mechanic.</div><div class="form-grid three-cols">${SAVA_FIT_COMPONENTS.map(([k,l],i)=>fText(`savaFit_${i}`,`${l} /5`,intake(g,k)??'','','number')).join('')}${fText('fitConfidence','Độ tin cậy Fit /5',intake(g,'Fit_Confidence_1_5')??'','','number')}</div>
       <div class="section-title">Post-test product evidence 1–5</div><div class="form-grid three-cols">${fText('uaTest','UA Test',g.scorecard?.uaTest??'','','number')}${fText('retention','Retention',g.scorecard?.retention??'','','number')}${fText('engagement','Engagement',g.scorecard?.engagement??'','','number')}${fText('monTest','Monetization Test',g.scorecard?.monetizationTest??'','','number')}${fText('gamefeel','Gamefeel Test',g.scorecard?.gamefeelTest??'','','number')}${fArea('notes','Decision notes',g.scorecard?.decisionNotes||'')}</div>`;
-    modal(isNew?'Add game':`${g.id} · ${intake(g,'Game_Title')}`,body,(root)=>{const old=g.id;g.id=formVal(root,'id')||old;g.intake=g.intake||{};Object.assign(g.intake,{Candidate_ID:g.id,Game_Title:formVal(root,'title'),Studio:formVal(root,'studio'),Mechanic:formVal(root,'mechanic'),Gamefeel_Archetype:formVal(root,'archetype'),Theme_Hook:formVal(root,'theme'),Target_GEO:formVal(root,'geo'),Monetization_Model:formVal(root,'monModel'),Build_Stage:formVal(root,'stage'),Build_URL:formVal(root,'buildUrl'),Store_URL:formVal(root,'storeUrl'),Owner:formVal(root,'owner'),Gate_Legal_IP:formVal(root,'gate_legal'),Gate_Build_Playable:formVal(root,'gate_build'),Gate_Tracking_Access:formVal(root,'gate_tracking'),Gate_Store_Compliance:formVal(root,'gate_store'),Gate_Commercial_Terms:formVal(root,'gate_commercial'),Gate_Rights_Confirmed:formVal(root,'gate_rights')});
-      g.scorecard=g.scorecard||{};Object.assign(g.scorecard,{marketSize:formNum(root,'marketSize'),growth:formNum(root,'growth'),entryAccess:formNum(root,'entry'),marketMonetization:formNum(root,'marketMon'),marketUaScalability:formNum(root,'marketUa'),readiness:formNum(root,'readiness'),dealEconomics:formNum(root,'deal'),savaFit:formNum(root,'savaFit'),dataCompleteness:formNum(root,'completeness'),evidenceQuality:formNum(root,'evidenceQ'),uaTest:formNum(root,'uaTest'),retention:formNum(root,'retention'),engagement:formNum(root,'engagement'),monetizationTest:formNum(root,'monTest'),gamefeelTest:formNum(root,'gamefeel'),decisionNotes:formVal(root,'notes')});const der=gameDerived(g);Object.assign(g.scorecard,{marketScore:der.market,productScore:der.product,preScanScore:der.prescan,finalScore:der.final,hardGate:der.hard,decisionStage:der.stage,recommendation:der.recommendation});if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
+    modal(isNew?'Add game':`${g.id} · ${intake(g,'Game_Title')}`,body,(root)=>{const old=g.id;g.id=formVal(root,'id')||old;g.intake=g.intake||{};Object.assign(g.intake,{Candidate_ID:g.id,Game_Title:formVal(root,'title'),Studio:formVal(root,'studio'),Mechanic:formVal(root,'mechanic'),Gamefeel_Archetype:formVal(root,'archetype'),Theme_Hook:formVal(root,'theme'),Target_GEO:formVal(root,'geo'),Monetization_Model:formVal(root,'monModel'),Build_Stage:formVal(root,'stage'),Build_URL:formVal(root,'buildUrl'),Store_URL:formVal(root,'storeUrl'),Owner:formVal(root,'owner'),Gate_Legal_IP:formVal(root,'gate_legal'),Gate_Build_Playable:formVal(root,'gate_build'),Gate_Tracking_Access:formVal(root,'gate_tracking'),Gate_Store_Compliance:formVal(root,'gate_store'),Gate_Commercial_Terms:formVal(root,'gate_commercial'),Gate_Rights_Confirmed:formVal(root,'gate_rights'),Fit_Confidence_1_5:formNum(root,'fitConfidence')});SAVA_FIT_COMPONENTS.forEach(([k],i)=>{g.intake[k]=formNum(root,`savaFit_${i}`);});
+      g.scorecard=g.scorecard||{};Object.assign(g.scorecard,{marketSize:formNum(root,'marketSize'),growth:formNum(root,'growth'),entryAccess:formNum(root,'entry'),marketMonetization:formNum(root,'marketMon'),marketUaScalability:formNum(root,'marketUa'),readiness:formNum(root,'readiness'),dealEconomics:formNum(root,'deal'),dataCompleteness:formNum(root,'completeness'),evidenceQuality:formNum(root,'evidenceQ'),uaTest:formNum(root,'uaTest'),retention:formNum(root,'retention'),engagement:formNum(root,'engagement'),monetizationTest:formNum(root,'monTest'),gamefeelTest:formNum(root,'gamefeel'),decisionNotes:formVal(root,'notes')});g.scorecard.savaFit=gameSavaFitDerived(g).avg5;const der=gameDerived(g);Object.assign(g.scorecard,{marketScore:der.market,productScore:der.product,preScanScore:der.prescan,finalScore:der.final,hardGate:der.hard,decisionStage:der.stage,recommendation:der.recommendation});if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
   }
 
-  function sourcingEditGuide(){return `<div class="sourcing-edit-guide"><div class="guide-title">Hướng dẫn BD</div><div class="guide-grid"><div><b>1. Screening → Qualified</b><p>“Loại” = Không Qualified. “Cân nhắc / Tiếp tục / Tiếp tục nhưng cần chỉnh sửa” = Qualified và vào Evaluation.</p></div><div><b>2. Deal → Test</b><p>Không nhập Ngày Test nếu chưa có Ngày Deal/ký hợp đồng. Test chỉ bắt đầu sau Deal.</p></div><div><b>3. Lead đang xử lý</b><p>Bắt buộc có BD phụ trách, Hành động tiếp theo và Hạn hành động để hệ thống theo dõi STUCK/quá hạn.</p></div><div><b>4. Market Fit</b><p>Mức phù hợp thị trường chỉ đo độ khớp với hướng Sourcing; không thay thế Screening và không tự suy diễn Sức hấp dẫn thị trường.</p></div></div></div>`;}
+  function sourcingEditGuide(){return `<div class="sourcing-edit-guide"><div class="guide-title">Hướng dẫn BD</div><div class="guide-grid"><div><b>1. Screening → Qualified</b><p>“Loại” = Không Qualified. “Cân nhắc / Tiếp tục / Tiếp tục nhưng cần chỉnh sửa” = Qualified và vào Evaluation.</p></div><div><b>2. Deal → Test</b><p>Không nhập Ngày Test nếu chưa có Ngày Deal/ký hợp đồng. Test chỉ bắt đầu sau Deal.</p></div><div><b>3. Lead đang xử lý</b><p>Bắt buộc có BD phụ trách, Hành động tiếp theo và Hạn hành động để hệ thống theo dõi STUCK/quá hạn.</p></div><div><b>4. Market Intelligence</b><p>Nếu Lead đã link Game hoặc match đúng mechanic, hệ thống tự lấy Định hướng + Sức hấp dẫn từ Market Intelligence; không nhập lại. Nếu chưa map được mới dùng nhóm chiến lược fallback.</p></div></div></div>`;}
   function openSourcing(id){
     let x=byId(db.sourcing,id);const isNew=!x;if(!x)x={id:`SRC-${String((db.sourcing||[]).filter(y=>/^SRC-/.test(y.id||'')).length+1).padStart(3,'0')}`,partnerId:'',gameId:'',leadName:'',game:'',studio:'',source:'',screeningResult:'',status:'Đang xử lý'};
     const align=sourcingMarketAlignment(x),stage=sourcingCurrentStage(x),q=sourcingQualified(x),alert=sourcingPipelineAlert(x);
@@ -1130,7 +1248,7 @@
       <div class="section-title">2. Screening & trạng thái</div><div class="form-grid three-cols">${fSelect('screening','Kết quả Screening',x.screeningResult||'',SOURCING_SCREENING)}${fSelect('status','Trạng thái',sourcingStatus(x),SOURCING_STATUS)}${fSelect('testResult','Kết quả Test',x.testResult||'',SOURCING_TEST_RESULT)}${fSelect('lost','Lý do loại',x.reasonLost||'',SOURCING_LOSS_REASONS)}${fArea('next','Hành động tiếp theo',x.nextAction||'','full')}${fText('deadline','Hạn hành động',x.actionDeadline||'','','date')}${fArea('notes','Ghi chú',x.notes||'','full')}</div>
       <div class="section-title">3. Mốc Funnel</div><div class="form-grid three-cols">${fText('leadDate','Ngày Lead',sourcingDate(x,'leadDate')||x.createdAt?.slice?.(0,10)||'','','date')}${fText('qualifiedDate','Ngày Qualified',sourcingDate(x,'qualifiedDate'),'','date')}${fText('evaluationDate','Ngày Evaluation',sourcingDate(x,'evaluationDate'),'','date')}${fText('dealDate','Ngày Deal / ký',sourcingDate(x,'dealDate'),'','date')}${fText('testDate','Ngày Test',sourcingDate(x,'testDate'),'','date')}${fText('launchDate','Ngày Launch',sourcingDate(x,'launchDate'),'','date')}${fText('scaleDate','Ngày Scale',sourcingDate(x,'scaleDate'),'','date')}</div>
       <div class="section-title">4. Tham chiếu Partner</div>${partnerRef}
-      <div class="section-title">5. Tham chiếu Market Intelligence</div><div class="sourcing-ref-grid"><div><span>Nhóm chiến lược</span><b>${esc(align.group)}</b></div><div><span>Mức phù hợp</span><b>${esc(align.label)}</b></div><div><span>Điểm phù hợp</span><b>${align.score===null?'—':align.score+'/100'}</b></div><div><span>Kết hợp Screening</span><b>${esc(sourcingScreeningAction(x))}</b></div></div>${x.historicalEvaluation?`<div class="section-title">6. Tham chiếu đánh giá lịch sử</div><div class="sourcing-ref-grid"><div><span>Kết quả</span><b>${esc(x.historicalEvaluation.result||'—')}</b></div><div><span>Mức hoàn thiện</span><b>${esc(x.historicalEvaluation.completion||'—')}</b></div><div><span>Tiềm năng</span><b>${esc(x.historicalEvaluation.potential||'—')}</b></div><div><span>Monetization</span><b>${esc(x.historicalEvaluation.monetization||'—')}</b></div></div>`:''}`;
+      <div class="section-title">5. Tham chiếu Market Intelligence</div><div class="sourcing-ref-grid"><div><span>Market / nhóm chiến lược</span><b>${esc(align.group)}</b></div><div><span>Định hướng / mức phù hợp</span><b>${esc(align.label)}</b></div><div><span>Điểm tham chiếu</span><b>${align.score===null?'—':align.score+'/100'}</b><small>${align.source==='market'?'Từ Market Intelligence':'Fallback chiến lược'}</small></div><div><span>Kết hợp Screening</span><b>${esc(sourcingScreeningAction(x))}</b></div></div>${x.historicalEvaluation?`<div class="section-title">6. Tham chiếu đánh giá lịch sử</div><div class="sourcing-ref-grid"><div><span>Kết quả</span><b>${esc(x.historicalEvaluation.result||'—')}</b></div><div><span>Mức hoàn thiện</span><b>${esc(x.historicalEvaluation.completion||'—')}</b></div><div><span>Tiềm năng</span><b>${esc(x.historicalEvaluation.potential||'—')}</b></div><div><span>Monetization</span><b>${esc(x.historicalEvaluation.monetization||'—')}</b></div></div>`:''}`;
     modal(isNew?'Thêm Lead Sourcing':`${x.id} · ${x.game||x.leadName||x.studio||''}`,body,(root)=>{
       const screening=formVal(root,'screening'),status=screening==='Loại'?'Loại':formVal(root,'status');const owner=formVal(root,'owner'),next=formVal(root,'next'),deadline=formVal(root,'deadline');const dealDate=formVal(root,'dealDate'),testDate=formVal(root,'testDate');
       if(testDate&&!dealDate){toast('Không thể lưu: Test chỉ bắt đầu sau khi Deal/ký hợp đồng.');return;}
@@ -1201,7 +1319,7 @@
   document.addEventListener('click',e=>{
     const a=e.target.closest('[data-action]');if(!a)return;
     const act=a.dataset.action;
-    if(act==='account')window.SAVA_SUPABASE?.accountAction?.(); else if(act==='refresh-cloud')refreshCloud(); else if(act==='open-sync')openSync(); else if(act==='export-json')exportJson(); else if(act==='quick-add'){({partners:()=>openPartner(),deals:()=>openDeal(),market:()=>openPublisher(),games:()=>openGame(),sourcing:()=>openSourcing(),operations:()=>openProject()}[currentView]||(()=>openSourcing()))();}
+    if(act==='account')window.SAVA_SUPABASE?.accountAction?.(); else if(act==='refresh-cloud')refreshCloud(); else if(act==='open-sync')openSync(); else if(act==='export-json')exportJson(); else if(act==='quick-add'){({partners:()=>openPartner(),deals:()=>openDeal(),market:()=>openPublisher(),games:()=>openGame(),sourcing:()=>openSourcing(),operations:()=>openProject(),sources:()=>toast('Tài liệu nguồn chỉ Admin mới được upload/replace')}[currentView]||(()=>openSourcing()))();}
     else if(act==='add-partner')openPartner();else if(act==='add-risk')addRisk();else if(act==='add-deal')openDeal();else if(act==='deal-rules')openDealRules();else if(act==='add-publisher')openPublisher();else if(act==='add-game')openGame();else if(act==='add-sourcing')openSourcing();else if(act==='add-project')openProject();
   });
   $('#globalSearch').addEventListener('input',e=>{searchTerm=e.target.value;render();});

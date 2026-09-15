@@ -322,6 +322,43 @@
     return true;
   }
 
+  const SOURCE_BUCKET = 'publishing-source-workbooks';
+
+  async function listSourceFiles() {
+    if (!session) await ensureSignedIn();
+    const { data, error } = await client.storage.from(SOURCE_BUCKET).list('', { limit: 100, sortBy: { column: 'name', order: 'asc' } });
+    if (error) throw new Error(`Source files: ${error.message}`);
+    return data || [];
+  }
+
+  async function uploadSourceFile(path, file) {
+    if (!session) await ensureSignedIn();
+    if (!profile) await loadProfile();
+    if (profile.role !== 'admin') throw new Error('Chỉ Admin được thay file nguồn.');
+    const { error } = await client.storage.from(SOURCE_BUCKET).upload(path, file, {
+      upsert: true,
+      cacheControl: '3600',
+      contentType: file.type || undefined
+    });
+    if (error) throw new Error(`Upload source file: ${error.message}`);
+    return true;
+  }
+
+  async function downloadSourceFile(path, downloadName) {
+    if (!session) await ensureSignedIn();
+    const { data, error } = await client.storage.from(SOURCE_BUCKET).download(path);
+    if (error) throw new Error(`Download source file: ${error.message}`);
+    const url = URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = downloadName || path;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    return true;
+  }
+
   async function refreshProfile() {
     await loadProfile();
     return clone(profile);
@@ -360,6 +397,9 @@
     canDelete: () => profile?.role === 'admin',
     getRole: () => profile?.role || 'viewer',
     getUser: () => clone(profile || {}),
+    listSourceFiles,
+    uploadSourceFile,
+    downloadSourceFile,
     getSnapshot: () => snapshot ? clone(snapshot) : null
   };
 })();

@@ -46,7 +46,7 @@
 
   function clone(v){ return JSON.parse(JSON.stringify(v)); }
   function val(v, fallback='—'){ return v === null || v === undefined || v === '' ? fallback : v; }
-  function num(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
+  function num(v){ if(v===null||v===undefined||(typeof v==='string'&&v.trim()==='')) return null; const n=Number(v); return Number.isFinite(n)?n:null; }
   function score100(v){ const n=num(v); if(n===null) return null; return Math.max(0,Math.min(100,n<=5?n*20:n)); }
   function avgScore100(...vals){ const xs=vals.map(score100).filter(x=>x!==null); return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null; }
   function displayScore100(v){ const n=score100(v); return n===null?'—':`${fmt(n,1)}/100`; }
@@ -193,10 +193,13 @@
     if(vals.every(x=>x==='PASS'||x==='PASS / Monitor')) return 'PASS';
     return 'PENDING';
   }
-  function weighted(scores,weights){
-    const items=Object.entries(weights); if(!items.every(([k])=>num(scores[k])!==null)) return null;
-    const total=items.reduce((s,[k,w])=>s+num(scores[k])*w,0); const wsum=items.reduce((s,[,w])=>s+w,0);
-    return Math.round((total/5/wsum*100)*10)/10;
+  function weighted(scores,weights,{minCount=null}={}){
+    const items=Object.entries(weights).filter(([k])=>num(scores[k])!==null);
+    const required=minCount===null?Object.keys(weights).length:minCount;
+    if(items.length<required) return null;
+    const total=items.reduce((s,[k,w])=>s+num(scores[k])*w,0);
+    const wsum=items.reduce((s,[,w])=>s+w,0);
+    return wsum?Math.round((total/5/wsum*100)*10)/10:null;
   }
   function gameSavaFitDerived(g){
     const components=SAVA_FIT_COMPONENTS.map(([key,label])=>({key,label,value:num(intake(g,key))}));
@@ -206,6 +209,31 @@
     if(avg5===null)avg5=num(g?.scorecard?.savaFit);
     const score=avg5===null?null:Math.round(avg5*20*10)/10;
     return {avg5:avg5===null?null:Math.round(avg5*100)/100,score,coverage:present.length,components};
+  }
+  const GAME_SCORE_KEYS=['marketSize','growth','entryAccess','marketMonetization','marketUaScalability','uaTest','retention','engagement','monetizationTest','gamefeelTest','readiness','dealEconomics'];
+  function gameEnsureScoreLayers(g){
+    g.scorecard=g.scorecard||{};
+    const s=g.scorecard;
+    if(!s.scoreLayersVersion){
+      s.autoScores=s.autoScores||{};
+      GAME_SCORE_KEYS.forEach(k=>{ if(s.autoScores[k]===undefined && num(s[k])!==null) s.autoScores[k]=num(s[k]); });
+      s.overrides=s.overrides||{};
+      s.scoreLayersVersion=1;
+    }else{
+      s.autoScores=s.autoScores||{};
+      s.overrides=s.overrides||{};
+    }
+    return s;
+  }
+  function gameAutoScore(g,key){const s=gameEnsureScoreLayers(g);return num(s.autoScores?.[key]);}
+  function gameOverrideScore(g,key){const s=gameEnsureScoreLayers(g);return num(s.overrides?.[key]);}
+  function gameEffectiveScore(g,key){const o=gameOverrideScore(g,key);return o!==null?o:gameAutoScore(g,key);}
+  function gameSavaFitEffective(g){const o=gameOverrideScore(g,'savaFit');return o!==null?o:gameSavaFitDerived(g).avg5;}
+  function gameScoreSource(g,key){return gameOverrideScore(g,key)!==null?'OVERRIDE':gameAutoScore(g,key)!==null?'AUTO':'EMPTY';}
+  function scoreOverrideField(name,label,g,key,help=''){
+    const auto=key==='savaFit'?gameSavaFitDerived(g).avg5:gameAutoScore(g,key),ovr=gameOverrideScore(g,key),eff=ovr!==null?ovr:auto;
+    const status=ovr!==null?'Dùng override':auto!==null?'Dùng AUTO':'Chưa có dữ liệu';
+    return `<div class="score-override-card"><div class="score-override-head"><div><label>${esc(label)}</label><span>${help?esc(help):''}</span></div><b>${eff===null?'—':fmt(eff,2)}/5</b></div><div class="score-override-grid"><div><span>AUTO SCORE</span><strong>${auto===null?'—':fmt(auto,2)}</strong></div><div class="field"><label>Override thủ công</label><input name="${name}" type="number" min="1" max="5" step="0.1" value="${esc(ovr??'')}"></div></div><div class="score-override-status ${ovr!==null?'manual':'auto'}">${status}${ovr!==null?' · cần evidence tốt hơn':''}</div></div>`;
   }
   function normalizeMechanicName(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,' ');}
   const STRATEGIC_PUZZLE_IDS=new Set(['MECH-001','MECH-002','MECH-003','MECH-004','MECH-005','MECH-006','MECH-007','MECH-008','MECH-009','MECH-010','MECH-011','MECH-012']);
@@ -242,21 +270,63 @@
   function mechanicSavaFit(mechanic){return mechanicExecutionFit(mechanic);}
   function mechanicSavaFitHtml(fit){return mechanicExecutionFitHtml(fit);}
   function gameDerived(g){
-    const s=g.scorecard||{};
-    const market=weighted({size:s.marketSize,growth:s.growth,entry:s.entryAccess,mon:s.marketMonetization,ua:s.marketUaScalability},{size:20,growth:20,entry:25,mon:20,ua:15});
-    const product=weighted({ua:s.uaTest,ret:s.retention,eng:s.engagement,mon:s.monetizationTest,gf:s.gamefeelTest},{ua:25,ret:30,eng:15,mon:20,gf:10});
-    const readiness=num(s.readiness), deal=num(s.dealEconomics), fit=gameSavaFitDerived(g).avg5;
-    const prescan=[market,readiness,deal,fit].every(x=>x!==null)?Math.round((market*.45+readiness*20*.2+deal*20*.2+fit*20*.15)*10)/10:null;
+    const s=gameEnsureScoreLayers(g);
+    const marketInputs={size:gameEffectiveScore(g,'marketSize'),growth:gameEffectiveScore(g,'growth'),entry:gameEffectiveScore(g,'entryAccess'),mon:gameEffectiveScore(g,'marketMonetization'),ua:gameEffectiveScore(g,'marketUaScalability')};
+    const productInputs={ua:gameEffectiveScore(g,'uaTest'),ret:gameEffectiveScore(g,'retention'),eng:gameEffectiveScore(g,'engagement'),mon:gameEffectiveScore(g,'monetizationTest'),gf:gameEffectiveScore(g,'gamefeelTest')};
+    const marketWeights={size:20,growth:20,entry:25,mon:20,ua:15};
+    const productWeights={ua:25,ret:30,eng:15,mon:20,gf:10};
+    // Workbook 10_SCORECARD: Market needs >=3/5 evidence groups; Product Evidence needs >=2/5.
+    // Missing sub-scores are reweighted across the available evidence, exactly as the workbook formulas do.
+    const market=weighted(marketInputs,marketWeights,{minCount:3});
+    const product=weighted(productInputs,productWeights,{minCount:2});
+    const marketEvidenceCount=Object.values(marketInputs).filter(v=>num(v)!==null).length;
+    const productEvidenceCount=Object.values(productInputs).filter(v=>num(v)!==null).length;
+    const readiness=gameEffectiveScore(g,'readiness'), deal=gameEffectiveScore(g,'dealEconomics'), fit=gameSavaFitEffective(g);
+    const coreCount=[readiness,deal,fit].filter(v=>v!==null).length;
+    const prescan=[market,readiness,deal,fit].every(x=>x!==null)?Math.round((market*.45+readiness*20*.20+deal*20*.20+fit*20*.15)*10)/10:null;
     const final=[market,product,readiness,deal,fit].every(x=>x!==null)?Math.round((market*.25+product*.35+readiness*20*.15+deal*20*.15+fit*20*.10)*10)/10:null;
-    const stage=product!==null?'POST-TEST':'PRE-SCAN';
-    const hard=gameHardGate(g), completeness=num(s.dataCompleteness);
+    const stage=productEvidenceCount>=2?'POST-TEST':'PRE-SCAN';
+    const preScanCompleteness=(marketEvidenceCount+coreCount)/8;
+    const postTestCompleteness=(marketEvidenceCount+productEvidenceCount+coreCount)/13;
+    const completeness=stage==='POST-TEST'?postTestCompleteness:preScanCompleteness;
+    const hard=gameHardGate(g);
+
+    // Exact workbook recommendation (10_SCORECARD!AB): retained for traceability.
     let recommendation='HOLD - NEED DATA';
     if(hard==='FAIL') recommendation='REJECT - GATE FAIL';
     else if(hard==='PENDING') recommendation=prescan!==null&&prescan>=60&&prescan<=75?'NEGOTIATE / CONDITIONAL SIGNING':'HOLD - FIX GATE';
-    else if(completeness!==null && completeness<.8) recommendation='HOLD - NEED DATA';
+    else if(completeness<.8) recommendation='HOLD - NEED DATA';
     else if(stage==='POST-TEST') recommendation=final>=80?'GREENLIGHT / SCALE':final>=68?'TEST MORE / RENEGOTIATE':'STOP / PASS';
     else recommendation=prescan>75?'DIRECT TO PRODUCT TEST':prescan>=60?'REVIEW PASSED / PROCEED TO PRODUCT TEST':'PASS / DO NOT SCAN';
-    return {market,product,prescan,final,stage,hard,recommendation};
+
+    // Publishing OS primary decision: Game Selection is a pre-test selection gate.
+    // Product Evidence, when already available for the candidate, is shown as an additional evidence layer rather than replacing the Pre-Scan decision.
+    let selectionDecision='Cần bổ sung dữ liệu';
+    if(hard==='FAIL') selectionDecision='Dừng — Hard Gate không đạt';
+    else if(hard==='PENDING') selectionDecision=prescan!==null&&prescan>=60&&prescan<=75?'Tiếp tục có điều kiện — hoàn thiện Hard Gate':'Chờ hoàn thiện Hard Gate';
+    else if(preScanCompleteness<.8) selectionDecision='Cần bổ sung dữ liệu Pre-Scan';
+    else if(prescan!==null&&prescan>75) selectionDecision='Tiếp tục';
+    else if(prescan!==null&&prescan>=60) selectionDecision='Tiếp tục có điều kiện';
+    else if(prescan!==null) selectionDecision='Chưa tiếp tục';
+
+    let evidenceDecision='Chưa có Product Evidence';
+    if(stage==='POST-TEST'){
+      if(postTestCompleteness<.8) evidenceDecision='Có evidence nhưng chưa đủ độ hoàn thiện';
+      else if(final>=80) evidenceDecision='Evidence rất tốt';
+      else if(final>=68) evidenceDecision='Evidence cần đánh giá thêm';
+      else evidenceDecision='Evidence cảnh báo';
+    }
+    return {market,product,prescan,final,stage,hard,recommendation,selectionDecision,evidenceDecision,marketEvidenceCount,productEvidenceCount,preScanCompleteness,postTestCompleteness,completeness};
+  }
+  function gameEvidenceSourceLabel(g){
+    return g?.scorecard?.productEvidenceSource||'Chưa xác định nguồn';
+  }
+  function gameEvidenceStatusHtml(g,d){
+    if(d.productEvidenceCount<2)return `<span class="badge">Pre-Scan</span><div class="small muted">${d.productEvidenceCount}/5 nhóm evidence</div>`;
+    return `<span class="badge blue">Có Product Evidence</span><div class="small muted">${d.productEvidenceCount}/5 · ${esc(gameEvidenceSourceLabel(g))}</div>`;
+  }
+  function gameSelectionDecisionHtml(d){
+    return `${badge(d.selectionDecision)}${d.stage==='POST-TEST'?`<div class="small muted" style="margin-top:5px">${esc(d.evidenceDecision)}${d.final===null?'':` · ${fmt(d.final,1)}/100`}</div>`:''}`;
   }
   function riskLevel(score){ const s=num(score); return s===null?'—':s>=9?'Nghiêm trọng':s>=6?'Cao':s>=3?'Trung bình':'Thấp'; }
   function nextRiskId(){
@@ -746,11 +816,21 @@
   }
 
   function renderGames(){
-    setHeader('Game Selection','4 · Market Fit + Product Fit + Marketing Fit + Business Potential');
-    const rows=db.games.filter(g=>includesSearch(g.id,intake(g,'Game_Title'),intake(g,'Studio'),intake(g,'Mechanic'),g.scorecard?.recommendation)).map(g=>{const d=gameDerived(g),sf=gameSavaFitDerived(g);return `<tr><td><button class="linkish" data-open-game="${g.id}">${g.id}</button></td><td><b>${esc(intake(g,'Game_Title'))}</b><div class="small muted">${esc(intake(g,'Studio')||'')}</div></td><td>${esc(intake(g,'Mechanic')||'—')}</td><td>${badge(intake(g,'Monetization_Model')||'—')}</td><td>${sf.score===null?'—':marketScoreBar(sf.score)}</td><td class="num">${d.market??g.scorecard?.marketScore??'—'}</td><td class="num">${d.prescan??g.scorecard?.preScanScore??'—'}</td><td class="num">${d.final??g.scorecard?.finalScore??'—'}</td><td>${badge(d.hard)}</td><td>${badge(d.recommendation)}</td><td><button class="ghost" data-open-game="${g.id}">Edit</button></td></tr>`;});
-    content.innerHTML=`<div class="grid kpis">${kpi('Candidates',db.games.length)}${kpi('Direct / proceed',db.games.filter(g=>/DIRECT|PROCEED|GREENLIGHT/.test(gameDerived(g).recommendation)).length)}${kpi('Pending gate',db.games.filter(g=>gameDerived(g).hard==='PENDING').length)}${kpi('Post-test',db.games.filter(g=>gameDerived(g).stage==='POST-TEST').length)}</div>
-      ${panel('Game decision pipeline',table(['ID','Game','Mechanic','Monetization','SAVA Fit /100','Market /100','Pre-Scan','Final','Gate','Recommendation',''],rows),'Preserves current workbook weighting and pre-scan/post-test separation.',`<button class="primary" data-action="add-game">+ Game</button>`)}
-      ${panel('Current scoring logic',`<div class="three"><div class="rule-card"><h3>Pre-Scan</h3><p>Market <b>45%</b> · Publishing Readiness <b>20%</b> · Deal Economics <b>20%</b> · SAVA Fit <b>15%</b>.</p></div><div class="rule-card"><h3>Post-Test</h3><p>Market <b>25%</b> · Product Evidence <b>35%</b> · Readiness <b>15%</b> · Deal <b>15%</b> · SAVA Fit <b>10%</b>.</p></div><div class="rule-card"><h3>Decision thresholds</h3><p>Direct test <b>&gt;75</b> · conditional floor <b>60</b> · Greenlight <b>80</b> · Test-more floor <b>68</b> · completeness <b>80%</b>.</p></div></div>`,'Hard Gate FAIL always overrides score.')}`;
+    setHeader('Game Selection','4 · Lựa chọn Game trước Test · Market Fit + Product Fit + Marketing Fit + Business Potential');
+    const derived=db.games.map(g=>({g,d:gameDerived(g)}));
+    const rows=db.games.filter(g=>includesSearch(g.id,intake(g,'Game_Title'),intake(g,'Studio'),intake(g,'Mechanic'),gameDerived(g).selectionDecision,gameDerived(g).recommendation)).map(g=>{
+      const d=gameDerived(g),sf=gameSavaFitDerived(g);
+      return `<tr><td><button class="linkish" data-open-game="${g.id}">${g.id}</button></td><td><b>${esc(intake(g,'Game_Title'))}</b><div class="small muted">${esc(intake(g,'Studio')||'')}</div></td><td>${esc(intake(g,'Mechanic')||'—')}</td><td>${badge(intake(g,'Monetization_Model')||'—')}</td><td>${sf.score===null?'—':marketScoreBar(sf.score)}</td><td class="num">${d.market??g.scorecard?.marketScore??'—'}</td><td class="num"><b>${d.prescan??'—'}</b><div class="small muted">Hoàn thiện ${pct(d.preScanCompleteness,0)}</div></td><td>${gameEvidenceStatusHtml(g,d)}</td><td class="num">${d.stage==='POST-TEST'?(d.final??'—'):'—'}</td><td>${badge(d.hard)}</td><td>${gameSelectionDecisionHtml(d)}</td><td><button class="ghost" data-open-game="${g.id}">Edit</button></td></tr>`;
+    });
+    const proceed=derived.filter(({d})=>/^Tiếp tục$/.test(d.selectionDecision)).length;
+    const conditional=derived.filter(({d})=>/Tiếp tục có điều kiện/.test(d.selectionDecision)).length;
+    const withEvidence=derived.filter(({d})=>d.stage==='POST-TEST').length;
+    const gateOpen=derived.filter(({d})=>d.hard!=='PASS').length;
+    const workbookGuide=`<div class="notice"><b>Cách đọc đúng workbook:</b> <b>Pre-Scan</b> là quyết định lựa chọn Game trước Test. Nếu Game/Candidate đã có ít nhất <b>2/5 nhóm Product Evidence thực tế</b> (UA Test, Retention, Engagement, Monetization Test, Gamefeel Test), workbook tự bật nhánh <b>POST-TEST</b> để chấm thêm một lớp evidence. Trong Publishing OS, lớp này được hiển thị là <b>“Có Product Evidence”</b> và không đồng nghĩa Test phải xảy ra trước Deal. Funnel vận hành vẫn giữ <b>Deal → Test</b>. Product Evidence có thể là data thực tế đã có của chính Game/Candidate hoặc data Test mới; không dùng benchmark thị trường để thay thế.</div>`;
+    content.innerHTML=`<div class="grid kpis">${kpi('Game đang đánh giá',db.games.length)}${kpi('Có thể đi tiếp',proceed+conditional,`${proceed} tiếp tục · ${conditional} có điều kiện`)}${kpi('Có Product Evidence',withEvidence,'Ít nhất 2/5 nhóm evidence thực tế')}${kpi('Hard Gate cần xử lý',gateOpen)}</div>
+      ${workbookGuide}
+      ${panel('Game decision pipeline',table(['ID','Game','Mechanic','Monetization','SAVA Fit /100','Market /100','Pre-Scan /100','Product Evidence','Điểm theo Evidence /100','Hard Gate','Kết luận lựa chọn',''],rows),'Kết luận chính của tab là quyết định Pre-Scan trước Test. Product Evidence sẵn có được dùng như lớp evidence bổ sung, theo đúng logic 10_SCORECARD.',`<button class="primary" data-action="add-game">+ Game</button>`)}
+      ${panel('Logic chấm điểm theo workbook',`<div class="three"><div class="rule-card"><h3>Pre-Scan · Quyết định chính</h3><p>Market <b>45%</b> · Publishing Readiness <b>20%</b> · Deal Economics <b>20%</b> · SAVA Fit <b>15%</b>.</p><p class="small muted">Market Score cần tối thiểu 3/5 market evidence. Pre-Scan dùng để quyết định có nên tiếp tục Deal/Test hay không.</p></div><div class="rule-card"><h3>Có Product Evidence · Lớp bổ sung</h3><p>Market <b>25%</b> · Product Evidence <b>35%</b> · Readiness <b>15%</b> · Deal <b>15%</b> · SAVA Fit <b>10%</b>.</p><p class="small muted">Tự bật khi có ≥2/5 evidence của chính candidate. Workbook gọi trạng thái này là POST-TEST.</p></div><div class="rule-card"><h3>Ngưỡng nguồn</h3><p>Pre-Scan: Direct <b>&gt;75</b> · Conditional <b>≥60</b>. Evidence: Greenlight <b>≥80</b> · Test-more <b>≥68</b>. Data completeness <b>≥80%</b>. Hard Gate FAIL luôn override.</p></div></div>`,'Giữ nguyên trọng số/ngưỡng của 10_SCORECARD; UI tách quyết định lựa chọn trước Test khỏi lớp Product Evidence để không hiểu nhầm workflow.')}`;
     bindOpeners();
   }
 
@@ -1226,15 +1306,24 @@
 
   function openGame(id){
     let g=byId(db.games,id);const isNew=!g;if(!g)g={id:`PUB-${String(db.games.length+1).padStart(3,'0')}`,intake:{},scorecard:{},tests:[]}; const d=gameDerived(g);
-    const body=`<div class="notice">Live derived result: Market <b>${d.market??'NE'}</b> · Pre-Scan <b>${d.prescan??'NE'}</b> · Final <b>${d.final??'NE'}</b> · Gate <b>${d.hard}</b> · ${d.recommendation}.</div>
+    const evidenceSourceOptions=['','Dữ liệu thực tế đã có của chính Game/Candidate','Dữ liệu Test mới sau Deal','Nguồn thực tế khác đã xác minh'];
+    const derivedSummary=`<div class="sourcing-derived"><div><span>Pre-Scan /100</span><b>${d.prescan??'—'}</b><small>Hoàn thiện ${pct(d.preScanCompleteness,0)}</small></div><div><span>Kết luận lựa chọn</span><b>${esc(d.selectionDecision)}</b></div><div><span>Product Evidence</span><b>${d.productEvidenceCount}/5 nhóm</b><small>${d.stage==='POST-TEST'?'Có lớp evidence bổ sung':'Pre-Scan only'}</small></div><div><span>Điểm theo Evidence</span><b>${d.stage==='POST-TEST'?(d.final??'—'):'—'}</b><small>${d.stage==='POST-TEST'?esc(d.evidenceDecision):'Chưa áp dụng'}</small></div></div>`;
+    const body=`<div class="notice"><b>Hướng dẫn:</b> Game Selection là bước lựa chọn Game <b>trước Test</b>. PRE-SCAN dùng Market + Publishing Readiness + Deal Economics + SAVA Fit. Các điểm 1–5 ưu tiên <b>AUTO SCORE từ dữ liệu nguồn</b>; chỉ Override thủ công khi có evidence tốt hơn và phải ghi lý do. Product Test để trống tới khi có data thực tế ở 08/09. Khi có ≥2/5 nhóm Product Evidence, workbook tự bật nhánh POST-TEST để bổ sung lớp evidence. <b>Hard Gate FAIL luôn override mọi score.</b></div>${derivedSummary}
       <div class="section-title">Candidate</div><div class="form-grid three-cols">${fText('id','Candidate ID',g.id)}${fText('title','Game title',intake(g,'Game_Title'))}${fText('studio','Studio',intake(g,'Studio'))}${fText('mechanic','Mechanic',intake(g,'Mechanic'))}${fText('archetype','Gamefeel archetype',intake(g,'Gamefeel_Archetype'))}${fText('theme','Theme / hook',intake(g,'Theme_Hook'))}${fText('geo','Target GEO',intake(g,'Target_GEO'))}${fSelect('monModel','Monetization',intake(g,'Monetization_Model')||'', ['', 'Hybrid IAP','Hybrid IAA'])}${fText('stage','Build stage',intake(g,'Build_Stage'))}${fText('buildUrl','Build URL',intake(g,'Build_URL'))}${fText('storeUrl','Store URL',intake(g,'Store_URL'))}${fText('owner','Owner',intake(g,'Owner'))}</div>
       <div class="section-title">Hard Gate</div><div class="form-grid three-cols">${[['legal','Gate_Legal_IP','Legal / IP'],['build','Gate_Build_Playable','Playable build'],['tracking','Gate_Tracking_Access','Tracking access'],['store','Gate_Store_Compliance','Store compliance'],['commercial','Gate_Commercial_Terms','Commercial terms'],['rights','Gate_Rights_Confirmed','Rights confirmed']].map(([n,k,l])=>fSelect(`gate_${n}`,l,intake(g,k)||'PENDING',GAME_GATE_STATUS)).join('')}</div>
-      <div class="section-title">Market score 1–5</div><div class="form-grid three-cols">${fText('marketSize','Market Size',g.scorecard?.marketSize??'','','number')}${fText('growth','Growth / Momentum',g.scorecard?.growth??'','','number')}${fText('entry','Entry Accessibility',g.scorecard?.entryAccess??'','','number')}${fText('marketMon','Market Monetization',g.scorecard?.marketMonetization??'','','number')}${fText('marketUa','UA / Creative Scalability',g.scorecard?.marketUaScalability??'','','number')}</div>
-      <div class="section-title">Publishing / Deal</div><div class="form-grid three-cols">${fText('readiness','Publishing Readiness',g.scorecard?.readiness??'','','number')}${fText('deal','Deal Economics',g.scorecard?.dealEconomics??'','','number')}${fText('completeness','Data completeness 0-1',g.scorecard?.dataCompleteness??'','','number')}${fText('evidenceQ','Evidence Quality 1-5',g.scorecard?.evidenceQuality??'','','number')}</div>
-      <div class="section-title">SAVA Publishing Fit · Dữ liệu dùng chung</div><div class="notice"><b>Điểm tự động:</b> ${gameSavaFitDerived(g).score===null?'Chưa đủ dữ liệu':fmt(gameSavaFitDerived(g).score,1)+'/100'} · Công thức nguồn: trung bình 7 tiêu chí bên dưới (1–5) × 20. Điểm này được Game Selection sử dụng trong Pre-Scan/Post-Test và Market Intelligence tự tổng hợp theo mechanic.</div><div class="form-grid three-cols">${SAVA_FIT_COMPONENTS.map(([k,l],i)=>fText(`savaFit_${i}`,`${l} /5`,intake(g,k)??'','','number')).join('')}${fText('fitConfidence','Độ tin cậy Fit /5',intake(g,'Fit_Confidence_1_5')??'','','number')}</div>
-      <div class="section-title">Post-test product evidence 1–5</div><div class="form-grid three-cols">${fText('uaTest','UA Test',g.scorecard?.uaTest??'','','number')}${fText('retention','Retention',g.scorecard?.retention??'','','number')}${fText('engagement','Engagement',g.scorecard?.engagement??'','','number')}${fText('monTest','Monetization Test',g.scorecard?.monetizationTest??'','','number')}${fText('gamefeel','Gamefeel Test',g.scorecard?.gamefeelTest??'','','number')}${fArea('notes','Decision notes',g.scorecard?.decisionNotes||'')}</div>`;
+      <div class="section-title">Market score 1–5 · AUTO + Override</div><div class="notice"><b>Rule workbook:</b> các cột 1–5 hiển thị <b>AUTO SCORE</b> từ dữ liệu nguồn. Chỉ dùng Override khi có evidence tốt hơn; nếu để trống, hệ thống luôn dùng AUTO. Market Score cần tối thiểu 3/5 nhóm và tự chia lại trọng số khi thiếu dữ liệu.</div><div class="score-override-list">${scoreOverrideField('ovr_marketSize','Market Size',g,'marketSize','Nguồn Market')}${scoreOverrideField('ovr_growth','Growth / Momentum',g,'growth','Nguồn Market')}${scoreOverrideField('ovr_entry','Entry Accessibility',g,'entryAccess','Nguồn Competition')}${scoreOverrideField('ovr_marketMon','Market Monetization',g,'marketMonetization','Nguồn Market')}${scoreOverrideField('ovr_marketUa','UA / Creative Scalability',g,'marketUaScalability','Nguồn UA benchmark')}</div>
+      <div class="section-title">Publishing / Deal · AUTO + Override</div><div class="score-override-list">${scoreOverrideField('ovr_readiness','Publishing Readiness',g,'readiness','Nguồn Publishing Intake')}${scoreOverrideField('ovr_deal','Deal Economics',g,'dealEconomics','Nguồn Publishing Intake / Deal')}${scoreOverrideField('ovr_savaFit','SAVA Publishing Fit',g,'savaFit','Trung bình 7 tiêu chí Fit')}${fText('evidenceQ','Evidence Quality 1-5',g.scorecard?.evidenceQuality??'','','number')}</div>
+      <div class="section-title">SAVA Publishing Fit · Dữ liệu nguồn</div><div class="notice"><b>AUTO:</b> ${gameSavaFitDerived(g).score===null?'Chưa đủ dữ liệu':fmt(gameSavaFitDerived(g).score,1)+'/100'} · Trung bình 7 tiêu chí bên dưới (1–5) × 20. Có thể override tổng Fit phía trên nếu có evidence tốt hơn, nhưng 7 tiêu chí nguồn vẫn được giữ để truy vết.</div><div class="form-grid three-cols">${SAVA_FIT_COMPONENTS.map(([k,l],i)=>fText(`savaFit_${i}`,`${l} /5`,intake(g,k)??'','','number')).join('')}${fText('fitConfidence','Độ tin cậy Fit /5',intake(g,'Fit_Confidence_1_5')??'','','number')}</div>
+      <div class="section-title">Product Evidence thực tế · AUTO + Override</div><div class="notice"><b>Product Test giữ trống cho tới khi có dữ liệu ở 08/09.</b> AUTO SCORE lấy từ UA/Product Test và Gamefeel Test của chính candidate. Chỉ override khi có evidence thực tế tốt hơn; không dùng benchmark thị trường thay thế. Có ít nhất <b>2/5</b> nhóm evidence hiệu lực thì workbook chuyển sang nhánh POST-TEST.</div><div class="form-grid three-cols">${fSelect('evidenceSource','Nguồn Product Evidence',g.scorecard?.productEvidenceSource||'',evidenceSourceOptions)}</div><div class="score-override-list">${scoreOverrideField('ovr_uaTest','UA Test',g,'uaTest','08/09')}${scoreOverrideField('ovr_retention','Retention',g,'retention','08/09')}${scoreOverrideField('ovr_engagement','Engagement',g,'engagement','08/09')}${scoreOverrideField('ovr_monTest','Monetization Test',g,'monetizationTest','08/09')}${scoreOverrideField('ovr_gamefeel','Gamefeel Test',g,'gamefeelTest','08_GAMEFEEL_USER_TEST')}</div>${fArea('overrideEvidence','Evidence / lý do cho Override',g.scorecard?.overrideEvidence||'','full')}${fArea('notes','Decision notes',g.scorecard?.decisionNotes||'')}</div>`;
     modal(isNew?'Add game':`${g.id} · ${intake(g,'Game_Title')}`,body,(root)=>{const old=g.id;g.id=formVal(root,'id')||old;g.intake=g.intake||{};Object.assign(g.intake,{Candidate_ID:g.id,Game_Title:formVal(root,'title'),Studio:formVal(root,'studio'),Mechanic:formVal(root,'mechanic'),Gamefeel_Archetype:formVal(root,'archetype'),Theme_Hook:formVal(root,'theme'),Target_GEO:formVal(root,'geo'),Monetization_Model:formVal(root,'monModel'),Build_Stage:formVal(root,'stage'),Build_URL:formVal(root,'buildUrl'),Store_URL:formVal(root,'storeUrl'),Owner:formVal(root,'owner'),Gate_Legal_IP:formVal(root,'gate_legal'),Gate_Build_Playable:formVal(root,'gate_build'),Gate_Tracking_Access:formVal(root,'gate_tracking'),Gate_Store_Compliance:formVal(root,'gate_store'),Gate_Commercial_Terms:formVal(root,'gate_commercial'),Gate_Rights_Confirmed:formVal(root,'gate_rights'),Fit_Confidence_1_5:formNum(root,'fitConfidence')});SAVA_FIT_COMPONENTS.forEach(([k],i)=>{g.intake[k]=formNum(root,`savaFit_${i}`);});
-      g.scorecard=g.scorecard||{};Object.assign(g.scorecard,{marketSize:formNum(root,'marketSize'),growth:formNum(root,'growth'),entryAccess:formNum(root,'entry'),marketMonetization:formNum(root,'marketMon'),marketUaScalability:formNum(root,'marketUa'),readiness:formNum(root,'readiness'),dealEconomics:formNum(root,'deal'),dataCompleteness:formNum(root,'completeness'),evidenceQuality:formNum(root,'evidenceQ'),uaTest:formNum(root,'uaTest'),retention:formNum(root,'retention'),engagement:formNum(root,'engagement'),monetizationTest:formNum(root,'monTest'),gamefeelTest:formNum(root,'gamefeel'),decisionNotes:formVal(root,'notes')});g.scorecard.savaFit=gameSavaFitDerived(g).avg5;const der=gameDerived(g);Object.assign(g.scorecard,{marketScore:der.market,productScore:der.product,preScanScore:der.prescan,finalScore:der.final,hardGate:der.hard,decisionStage:der.stage,recommendation:der.recommendation});if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
+      g.scorecard=g.scorecard||{};const sc=gameEnsureScoreLayers(g);sc.overrides=sc.overrides||{};
+      const overrideMap={marketSize:'ovr_marketSize',growth:'ovr_growth',entryAccess:'ovr_entry',marketMonetization:'ovr_marketMon',marketUaScalability:'ovr_marketUa',readiness:'ovr_readiness',dealEconomics:'ovr_deal',savaFit:'ovr_savaFit',uaTest:'ovr_uaTest',retention:'ovr_retention',engagement:'ovr_engagement',monetizationTest:'ovr_monTest',gamefeelTest:'ovr_gamefeel'};
+      let hasOverride=false;Object.entries(overrideMap).forEach(([k,nm])=>{const v=formNum(root,nm);if(v!==null){hasOverride=true;sc.overrides[k]=v;}else delete sc.overrides[k];});
+      const overrideEvidence=formVal(root,'overrideEvidence').trim();if(hasOverride&&!overrideEvidence){toast('Override thủ công cần ghi rõ evidence / lý do tốt hơn nguồn AUTO.');return;}sc.overrideEvidence=overrideEvidence;sc.overrideUpdatedAt=hasOverride?new Date().toISOString():sc.overrideUpdatedAt||null;
+      sc.evidenceQuality=formNum(root,'evidenceQ');sc.productEvidenceSource=formVal(root,'evidenceSource');sc.decisionNotes=formVal(root,'notes');
+      // Backward-compatible effective values. AUTO stays in sc.autoScores; manual changes stay in sc.overrides.
+      GAME_SCORE_KEYS.forEach(k=>{sc[k]=gameEffectiveScore(g,k);});sc.savaFit=gameSavaFitEffective(g);
+      const der=gameDerived(g);Object.assign(sc,{marketScore:der.market,productScore:der.product,preScanScore:der.prescan,finalScore:der.final,dataCompleteness:der.completeness,hardGate:der.hard,decisionStage:der.stage,recommendation:der.recommendation,selectionDecision:der.selectionDecision,evidenceDecision:der.evidenceDecision});if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
   }
 
   function sourcingEditGuide(){return `<div class="sourcing-edit-guide"><div class="guide-title">Hướng dẫn BD</div><div class="guide-grid"><div><b>1. Screening → Qualified</b><p>“Loại” = Không Qualified. “Cân nhắc / Tiếp tục / Tiếp tục nhưng cần chỉnh sửa” = Qualified và vào Evaluation.</p></div><div><b>2. Deal → Test</b><p>Không nhập Ngày Test nếu chưa có Ngày Deal/ký hợp đồng. Test chỉ bắt đầu sau Deal.</p></div><div><b>3. Lead đang xử lý</b><p>Bắt buộc có BD phụ trách, Hành động tiếp theo và Hạn hành động để hệ thống theo dõi STUCK/quá hạn.</p></div><div><b>4. Market Intelligence</b><p>Nếu Lead đã link Game hoặc match đúng mechanic, hệ thống tự lấy Định hướng + Sức hấp dẫn từ Market Intelligence; không nhập lại. Nếu chưa map được mới dùng nhóm chiến lược fallback.</p></div></div></div>`;}

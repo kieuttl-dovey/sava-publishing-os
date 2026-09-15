@@ -1,3 +1,41 @@
+# v0.23 — Game Selection AUTO Score + Manual Override
+
+- Match đúng ghi chú 10_SCORECARD: PRE-SCAN dùng Market + Publishing Readiness + Deal Economics + SAVA Fit.
+- Các điểm 1–5 hiển thị AUTO SCORE từ dữ liệu nguồn và cho phép Override thủ công khi có evidence tốt hơn.
+- Override bắt buộc có Evidence / lý do để truy vết.
+- Product Test giữ trống cho tới khi có dữ liệu thực tế ở 08/09; có ≥2/5 nhóm evidence thì bật nhánh POST-TEST.
+- Hard Gate FAIL luôn override score.
+- Không cần migration SQL; score layers lưu trong JSON scorecard hiện có.
+
+# v0.22 — Game Selection: Pre-Scan chính + Product Evidence tùy chọn
+
+Bản này double-check trực tiếp với workbook `SAVA_Mobile_Game_Decision_Pub(3)_UPDATED_SCORES_SAFE (3).xlsm`, đặc biệt sheet `10_SCORECARD` và `01_DATA_REQUEST`.
+
+## Logic Game Selection
+
+- **Game Selection là quyết định trước Test.** Pre-Scan là lớp quyết định chính.
+- Pre-Scan giữ đúng trọng số workbook: **Market 45% · Publishing Readiness 20% · Deal Economics 20% · SAVA Publishing Fit 15%**.
+- Workbook chỉ bật `POST-TEST` khi có ít nhất **2/5 nhóm Product Evidence**: UA Test, Retention, Engagement, Monetization Test, Gamefeel Test. Trong UI, trạng thái này được gọi rõ hơn là **Có Product Evidence** để tránh hiểu nhầm workflow.
+- Product Evidence có thể là dữ liệu thực tế đã có của chính Game/Candidate hoặc dữ liệu Test mới sau Deal. Không dùng market benchmark thay thế Product Evidence.
+- Nếu có Product Evidence, tool tính thêm điểm theo Evidence theo đúng trọng số workbook: **Market 25% · Product Evidence 35% · Readiness 15% · Deal 15% · SAVA Fit 10%**.
+- Funnel vận hành vẫn theo Sourcing: **Evaluation → Deal → Test → Launch → Scale**. Việc một Game có Product Evidence sẵn không làm thay đổi thứ tự Funnel.
+
+## Formula parity với workbook
+
+- Market Score cần tối thiểu **3/5** nhóm market evidence và tự chia lại trọng số trên dữ liệu có sẵn.
+- Product Score cần tối thiểu **2/5** nhóm Product Evidence và tự chia lại trọng số trên dữ liệu có sẵn.
+- Data completeness được tính tự động theo công thức nguồn, không nhập tay.
+- Hard Gate FAIL luôn override.
+- Sửa lỗi nền tảng: giá trị `null`/trống không còn bị JavaScript hiểu thành `0`. Lỗi này trước đây có thể làm Game bị nhận nhầm là có Product Evidence và nhảy sang POST-TEST.
+
+## UI mới
+
+Bảng Game Selection hiển thị: **Pre-Scan /100 · Product Evidence · Điểm theo Evidence /100 · Hard Gate · Kết luận lựa chọn**. Kết luận chính luôn là quyết định Pre-Scan; lớp Evidence chỉ bổ sung góc nhìn khi Game đã có dữ liệu thực tế.
+
+Không cần migration SQL cho v0.22.
+
+---
+
 # v0.21 — Market Intelligence dùng chung Strategic Fit + Execution Fit
 
 Bản này sửa logic Market theo mô hình **một Publishing OS / một nguồn dữ liệu dùng chung** và đối chiếu đồng thời với các workbook nguồn, đặc biệt `SAVA_Sourcing_Funnel_KPI_Thuan_Viet(1).xlsx` và Game Selection.

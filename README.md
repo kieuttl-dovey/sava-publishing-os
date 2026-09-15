@@ -1,4 +1,13 @@
-# SAVA Publishing OS v0.12 — Selective Market Watch & Edit Rules
+# SAVA Publishing OS v0.13 — Market Opportunity Map Logic
+
+## v0.13 changes — Bản đồ cơ hội phản ánh đúng market trước khi có SAVA Fit
+
+- `Ưu tiên tìm kiếm game/đối tác`: chỉ khi Sức hấp dẫn ≥80, xu hướng Bứt phá/Tăng trưởng tốt và SAVA Fit ≥70.
+- `Ưu tiên kiểm thử`: Sức hấp dẫn ≥70 + tín hiệu tích cực; **SAVA Fit chưa nhập vẫn được phép vào nhóm này**. Thiếu SAVA Fit chỉ chặn mức ưu tiên cao nhất.
+- `Theo dõi thêm`: mechanic có score từ 45–69.9 nhưng trend tích cực vẫn được giữ để theo dõi, không bị loại thẳng.
+- `Theo dõi chọn lọc`: market suy giảm nhưng Khả năng kiếm tiền ≥60/100.
+- `Chưa ưu tiên`: market suy giảm + monetization yếu, hoặc score thấp và không có tín hiệu tăng trưởng đủ đáng chú ý.
+- Bảng rule trong Edit Mechanic đã cập nhật đúng logic trên.
 
 ## v0.12 changes — logic thị trường rõ hơn cho Sếp và BD
 

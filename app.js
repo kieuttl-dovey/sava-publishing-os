@@ -537,23 +537,37 @@
   function marketDirection(x){
     const score=num(x.score),fit=num(x.savaFit),trend=x.trend?.key||'na',mon=num(x.monetization);
     if(x.completeness<.34)return {key:'data',label:'Bổ sung dữ liệu',desc:'Chưa đủ dữ liệu thị trường để đưa ra định hướng đáng tin cậy.'};
+
     const declining=['decline','sharp-decline','rev-decline','user-decline'].includes(trend);
     const strongTrend=['breakout','growth-good'].includes(trend);
     const testTrend=['low-base','user-expand','rev-growth'].includes(trend);
     const splitTrend=['user-up-rev-down','rev-up-user-down'].includes(trend);
+    const positiveTrend=strongTrend||testTrend;
+
+    // 1) Market đang co lại nhưng vẫn monetize tốt: không loại thẳng, chuyển sang theo dõi chọn lọc.
     if(declining){
-      if(mon!==null&&mon>=60)return {key:'selective',label:'Theo dõi chọn lọc',desc:'Xu hướng 3M đang suy giảm nhưng khả năng kiếm tiền vẫn ở mức Tốt/Rất tốt. Không ưu tiên tìm kiếm đại trà; chỉ xem xét game/đối tác có chất lượng cao, lợi thế rõ hoặc thesis riêng.'};
-      if(score!==null&&score>=65&&fit!==null&&fit>=80)return {key:'watch',label:'Theo dõi thêm',desc:'Thị trường đang suy giảm nhưng vẫn có mức phù hợp cao với SAVA; chỉ nên theo dõi có chọn lọc.'};
-      return {key:'low',label:'Chưa ưu tiên',desc:'Xu hướng thị trường đang suy giảm và khả năng kiếm tiền chưa đủ mạnh; chưa nên dành nhiều nguồn lực tìm kiếm hoặc kiểm thử.'};
+      if(mon!==null&&mon>=60)return {key:'selective',label:'Theo dõi chọn lọc',desc:'Xu hướng 3M đang suy giảm nhưng khả năng kiếm tiền vẫn ở mức Tốt/Rất tốt. Chỉ xem xét game/đối tác có chất lượng cao hoặc lợi thế rõ; không tìm kiếm đại trà.'};
+      if(score!==null&&score>=65&&fit!==null&&fit>=80)return {key:'watch',label:'Theo dõi thêm',desc:'Market đang suy giảm nhưng vẫn rất phù hợp với SAVA; tiếp tục theo dõi trước khi phân bổ thêm nguồn lực.'};
+      return {key:'low',label:'Chưa ưu tiên',desc:'Xu hướng đang suy giảm và khả năng kiếm tiền chưa đủ mạnh; chưa nên dành nhiều nguồn lực.'};
     }
+
+    // 2) Mức cao nhất chỉ mở khi market tốt + trend khỏe + SAVA Fit đã được xác nhận.
     if(score!==null&&score>=80&&fit!==null&&fit>=70&&strongTrend){
-      return {key:'priority',label:'Ưu tiên tìm kiếm game/đối tác',desc:'Thị trường hấp dẫn, xu hướng tăng tốt và đã xác nhận phù hợp với SAVA.'};
+      return {key:'priority',label:'Ưu tiên tìm kiếm game/đối tác',desc:'Market hấp dẫn, xu hướng tăng khỏe và đã xác nhận phù hợp với SAVA. BD có thể chủ động tìm game/studio/partner trong nhóm này.'};
     }
+
+    // 3) Market đủ tốt để kiểm thử dù SAVA Fit chưa nhập. Thiếu SAVA Fit chỉ chặn mức "Ưu tiên tìm kiếm", không hạ xuống "Theo dõi thêm".
     if(score!==null&&score>=70&&(
-      strongTrend||testTrend||(trend==='stable'&&mon!==null&&mon>=75)||(splitTrend&&mon!==null&&mon>=65)
+      positiveTrend||(trend==='stable'&&mon!==null&&mon>=75)||(splitTrend&&mon!==null&&mon>=65)
     )&&(fit===null||fit>=55)){
-      return {key:'test',label:'Ưu tiên kiểm thử',desc:'Tín hiệu thị trường tích cực nhưng vẫn cần kiểm chứng thêm bằng game/test thực tế trước khi tăng nguồn lực.'};
+      return {key:'test',label:'Ưu tiên kiểm thử',desc:'Tín hiệu market đủ tốt để ưu tiên test. Nếu SAVA Fit chưa nhập, dùng test để xác minh Product/Marketing Fit trước khi nâng lên mức chủ động tìm kiếm.'};
     }
+
+    // 4) Tín hiệu tăng trưởng tích cực nhưng score chưa đủ 70 vẫn đáng theo dõi thay vì loại thẳng.
+    if(score!==null&&score>=45&&(positiveTrend||splitTrend)){
+      return {key:'watch',label:'Theo dõi thêm',desc:'Xu hướng có tín hiệu tích cực nhưng sức hấp dẫn tổng thể chưa đủ để ưu tiên test; tiếp tục cập nhật quy mô, monetization, CPI và SAVA Fit.'};
+    }
+
     if(score!==null&&score>=55){
       return {key:'watch',label:'Theo dõi thêm',desc:'Có cơ hội nhưng tín hiệu chưa đủ mạnh hoặc chưa đồng thuận để ưu tiên ngay.'};
     }
@@ -981,9 +995,10 @@
         <tr><td>Dữ liệu thị trường quá thiếu</td><td><b>Bổ sung dữ liệu</b></td><td>Chưa kết luận; cần hoàn thiện benchmark.</td></tr>
         <tr><td>Xu hướng suy giảm + Khả năng kiếm tiền ≥60/100</td><td><b>Theo dõi chọn lọc</b></td><td>Market có thể trưởng thành/niche nhưng vẫn monetize tốt; chỉ xem xét game/partner chất lượng cao, không tìm kiếm đại trà.</td></tr>
         <tr><td>Sức hấp dẫn ≥80 + Phù hợp SAVA ≥70 + Bứt phá/Tăng trưởng tốt</td><td><b>Ưu tiên tìm kiếm game/đối tác</b></td><td>BD chủ động tìm game/studio/partner trong mechanic này.</td></tr>
-        <tr><td>Sức hấp dẫn ≥70 + tín hiệu tích cực + SAVA Fit không thấp</td><td><b>Ưu tiên kiểm thử</b></td><td>Nếu có game phù hợp thì test sớm trước khi tăng nguồn lực.</td></tr>
+        <tr><td>Sức hấp dẫn ≥70 + tín hiệu tích cực; SAVA Fit chưa nhập hoặc ≥55</td><td><b>Ưu tiên kiểm thử</b></td><td>Market đủ tốt để test. Chưa nhập SAVA Fit không làm market bị hạ xuống Theo dõi thêm; test là bước xác minh trước khi nâng lên chủ động tìm kiếm.</td></tr>
+        <tr><td>Sức hấp dẫn 45–69.9 + Bứt phá/Tăng trưởng tốt/Tăng mạnh từ nền thấp/Mở rộng user/Tăng trưởng doanh thu</td><td><b>Theo dõi thêm</b></td><td>Trend có tín hiệu tích cực nhưng economics tổng thể chưa đủ mạnh để ưu tiên test.</td></tr>
         <tr><td>Sức hấp dẫn ≥55 nhưng tín hiệu chưa đủ mạnh/đồng thuận</td><td><b>Theo dõi thêm</b></td><td>Tiếp tục quan sát market và cập nhật dữ liệu.</td></tr>
-        <tr><td>Xu hướng suy giảm + kiếm tiền yếu, hoặc sức hấp dẫn &lt;55</td><td><b>Chưa ưu tiên</b></td><td>Chưa nên dành nhiều nguồn lực.</td></tr>
+        <tr><td>Xu hướng suy giảm + kiếm tiền yếu, hoặc sức hấp dẫn thấp và không có tín hiệu tăng trưởng đáng kể</td><td><b>Chưa ưu tiên</b></td><td>Chưa nên dành nhiều nguồn lực.</td></tr>
       </tbody></table><p class="small muted"><b>Sức hấp dẫn /100</b> hiện dùng: Quy mô 30% · Đà tăng trưởng 25% · Khả năng kiếm tiền 20% · UA 15% · Phù hợp SAVA 10%. Metric thiếu được bỏ khỏi mẫu số và trọng số còn lại tự chuẩn hóa.</p></div></details>
     </div>`;
   }

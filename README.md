@@ -1,6 +1,19 @@
-# SAVA Publishing OS v0.9 — Market Intelligence Executive View
+# SAVA Publishing OS v0.10 — Market Trend Logic & Clearer Metrics
 
 Internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
+
+## v0.10 changes — Market trend logic & clearer executive labels
+
+Market Intelligence has been refined to make the chart and trend labels easier to understand and more appropriate for mobile game market review:
+
+- `Đà tăng trưởng /100` = 50% percentile rank of DL Growth 3M + 50% percentile rank of Revenue Growth 3M. It is a relative score within the current dataset, not a raw growth percentage.
+- `Khả năng kiếm tiền /100` = percentile rank of RPD (Revenue per Download) within the current dataset.
+- Trend badges no longer use a simple arithmetic average of DL Growth and Revenue Growth. They classify the relationship between the two signals: Bứt phá, Tăng trưởng tốt, Ổn định, Mở rộng user, Tăng trưởng doanh thu, User ↑ / Revenue ↓, Revenue ↑ / User ↓, User suy giảm, Doanh thu suy giảm, Suy giảm, Suy giảm mạnh, or Chưa đủ dữ liệu.
+- If both DL and Revenue grow >=50% but current market scale is in the bottom quartile, the label becomes `Tăng mạnh từ nền thấp` instead of `Bứt phá`.
+- Opportunity Map now shows `Xu hướng 3M: ...` explicitly.
+- Market chart axes and explanations use business-friendly Vietnamese wording.
+- The Market detail editor explains how Growth and RPD are used so BD can enter data consistently.
+
 
 ## v0.9 changes — Market Intelligence for decision making
 

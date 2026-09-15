@@ -1,6 +1,63 @@
-# SAVA Publishing OS v0.6 — Compact Partner Executive View
+# SAVA Publishing OS v0.7 — Deal Making Playbook
 
 Internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
+
+## v0.7 changes — Deal Making
+
+The **Deal Making** module is rebuilt from `SAVA_Deal_Making_Playbook_Thuan_Viet_v14_Huong_Dan_03_04(1).xlsx`. The web keeps the workbook as the business-rule source of truth while presenting it as an executive operating flow.
+
+### Executive Deal register
+
+Each Deal now shows:
+
+- Partner / Game, status and Game stage
+- **Mức sẵn sàng /100**
+- **Rủi ro Deal /100** and risk band
+- SAVA support level and recommended Deal direction
+- RS **ngưỡng / hiện tại / mục tiêu**
+- UA tier and monthly UA commitment
+- Maximum investment capacity and proposed initial commitment
+- Auto decision and next action
+
+### Source workbook logic implemented
+
+- Deal Risk /100: Partner 15% · Game evidence 25% · SAVA risk tolerance 20% · Deal competition 10% · bargaining power 10% · protection 20%.
+- Readiness /100: Partner 20% · Game evidence 30% · strategic value 15% · bargaining 10% · protection 15% · inverse risk tolerance 10%.
+- Risk bands: `<30 Thấp`, `30–49 Trung bình`, `50–69 Cao`, `≥70 Rất cao`.
+- Revenue Share floor: 50% before Soft Launch with no support; 60% at Soft Launch+ with no support; 70% for supported deals; material support targets 80%.
+- UA tiers: T1 `≤$10K/month → 70% target`, T2 `≤$30K → 75%`, T3 `≤$100K → 80%`, T4 `>$100K → 80% / management review`.
+- Initial commitment by stage: Concept 10% · Prototype 15% · MVP 25% · Full Game 30% · Soft Launch 40% · Live/Scale 60%.
+- High SAVA risk tolerance `≥4` requires protection `≥4`.
+- Hard Gate, RS floor, protection, risk and capital checks override readiness in the final recommendation.
+
+### Negotiation workspace
+
+The Deal modal now mirrors the workbook negotiation structure:
+
+- Điều khoản
+- auto-generated **Logic / Mặc định SAVA**
+- Tham chiếu thị trường
+- Mục tiêu / Mức chấp nhận / Ngưỡng dừng
+- Yêu cầu Partner / Kết quả cuối
+- Giá trị đổi lại nếu nhượng bộ
+- Auto-check for final SAVA Revenue Share
+- Ghi chú
+
+The 10 workbook term types are pre-created for a Deal that has not yet entered negotiation data.
+
+### Milestone & final approval
+
+- Default stages: Ký kết / Thiết lập → Test / Prototype → Soft Launch / Xác thực → Scale / Commercial.
+- Fields include KPI/pass condition, capital unlocked, Partner obligation, fail action, SAVA right, owner, status and notes.
+- Final approval tracks Data / IP / Exit, final RS, signing conditions, open risks, approver and decision date.
+
+### Publisher references
+
+The evidence-backed reference cases in the source workbook are available in Deal Making for Supersonic, Homa, SayGames, AppQuantum, Tilting Point and Voodoo. The app does not infer unpublished economics from these references.
+
+### Supabase
+
+No SQL migration is required. New Deal fields are stored inside the existing `deals.data` JSON and Deal rule parameters use the existing `playbook_configs` table. `supabase-data.js` is updated so the `dealMaking` playbook config syncs across the team.
 
 This version uses **Supabase Auth + Postgres** as the shared source of truth. GitHub Pages only hosts the static frontend.
 
@@ -114,12 +171,17 @@ Never put these values in frontend source:
 
 ## Deploy to GitHub Pages
 
-For upgrading from v0.4, only these files changed and need to be uploaded over the existing repo files:
+### Upgrade from v0.6 to v0.7
+
+Upload/replace these **5 files** in the current GitHub repo:
 
 - `index.html`
 - `app.js`
 - `styles.css`
+- `supabase-data.js`
 - `README.md`
+
+Do **not** upload anything to Supabase and do not run a SQL migration for this version.
 
 Then wait for GitHub Pages to redeploy and hard-refresh the site once.
 

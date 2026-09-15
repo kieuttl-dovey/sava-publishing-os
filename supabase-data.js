@@ -148,6 +148,7 @@
       projects: projects.map(x => x.data || {}),
       playbook: {
         partnerSelection: pb.partnerSelection || {},
+        dealMaking: pb.dealMaking || {},
         gameSelection: pb.gameSelection || {},
         operation: pb.operation || {}
       },
@@ -280,7 +281,7 @@
     }
 
     const pbRows = [];
-    for (const key of ['partnerSelection', 'gameSelection', 'operation']) {
+    for (const key of ['partnerSelection', 'dealMaking', 'gameSelection', 'operation']) {
       if (!eq(db.playbook?.[key], snapshot?.playbook?.[key])) {
         pbRows.push({ key, data: db.playbook?.[key] || {}, updated_by: session.user.id });
       }

@@ -2,14 +2,14 @@
   'use strict';
 
   const NAV = [
-    ['dashboard','Tổng quan','Tổng quan'],
+    ['dashboard','⌂','Tổng quan'],
     ['partners','1','Partner Selection'],
     ['deals','2','Deal Making'],
     ['market','3','Market Intelligence'],
     ['games','4','Game Selection'],
     ['sourcing','5','Sourcing'],
     ['operations','6','Publishing Operation'],
-    ['sources','Nguồn','Tài liệu nguồn']
+    ['sources','7','Tài liệu nguồn']
   ];
   const STAGES = ['Lead','Qualified','Evaluation','Deal','Test','Launch','Scale'];
   const SOURCING_SLA = {Lead:14, Qualified:10, Evaluation:14, Deal:30, Test:21, Launch:30, Scale:999};
@@ -522,7 +522,7 @@
   }
 
   function nav(){
-    $('#mainNav').innerHTML=NAV.map(([id,n,label])=>`<button data-nav="${id}" class="${currentView===id?'active':''}"><span class="num">${n}</span>${label}</button>`).join('');
+    $('#mainNav').innerHTML=NAV.map(([id,n,label])=>`<button data-nav="${id}" class="${currentView===id?'active':''}"><span class="num">${n}</span><span class="nav-label">${label}</span></button>`).join('');
     $('#mainNav').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{currentView=b.dataset.nav;location.hash=currentView;render();});
   }
   function setHeader(title,eyebrow='Publishing Operating System'){$('#pageTitle').textContent=title;$('#pageEyebrow').textContent=eyebrow;}
@@ -552,7 +552,7 @@
   }
 
   function renderDashboard(){
-    setHeader('Tổng quan điều hành','SAVA Publishing · Executive Overview');
+    setHeader('Tổng quan Publishing','SAVA Publishing · Tổng quan điều hành');
 
     const partners=(db.partners||[]).map(p=>({p,d:partnerDerived(p)}));
     const games=(db.games||[]).map(g=>({g,d:gameDerived(g)}));
@@ -593,13 +593,13 @@
     const navLink=(label,view)=>`<button class="exec-link" data-dash-nav="${view}">${esc(label)} →</button>`;
 
     const focus=[];
-    highPartnerRisks.slice(0,3).forEach(r=>focus.push({tone:'bad',title:`Risk Partner · ${r.partnerId}`,detail:r.risk||r.name||`${r.level||riskLevel(r.score)} risk`,view:'partners'}));
-    if(stuck.length)focus.push({tone:'bad',title:`${stuck.length} Lead đang STUCK`,detail:'Vượt SLA ở giai đoạn hiện tại; cần xử lý bottleneck.',view:'sourcing'});
-    if(overdue.length)focus.push({tone:'warn',title:`${overdue.length} Lead quá hạn hành động`,detail:'Next action đã quá deadline.',view:'sourcing'});
-    if(gameGateOpen.length)focus.push({tone:'warn',title:`${gameGateOpen.length} Game còn Hard Gate mở`,detail:'Chưa nên ra quyết định đi tiếp trước khi đóng Gate.',view:'games'});
-    if(highRiskDeals.length)focus.push({tone:'warn',title:`${highRiskDeals.length} Deal rủi ro cao`,detail:'Risk Score ≥50/100; cần kiểm tra protection / capital / RS.',view:'deals'});
-    if(opAttention.length)focus.push({tone:'warn',title:`${opAttention.length} Project cần review Gate`,detail:'Có HOLD / TEST THÊM / FAIL / STOP trong Publishing Operation.',view:'operations'});
-    if(!focus.length)focus.push({tone:'good',title:'Không có blocker cấp cao',detail:'Hiện chưa có cảnh báo ưu tiên cao trong dữ liệu đang đồng bộ.',view:'dashboard'});
+    highPartnerRisks.slice(0,3).forEach(r=>focus.push({tone:'bad',title:`Rủi ro Partner · ${r.partnerId}`,detail:r.risk||r.name||`${r.level||riskLevel(r.score)} risk`,view:'partners'}));
+    if(stuck.length)focus.push({tone:'bad',title:`${stuck.length} Lead vượt SLA`,detail:'Đã vượt thời gian xử lý chuẩn ở giai đoạn hiện tại; cần xử lý điểm nghẽn.',view:'sourcing'});
+    if(overdue.length)focus.push({tone:'warn',title:`${overdue.length} Lead quá hạn hành động`,detail:'Hành động tiếp theo đã quá hạn.',view:'sourcing'});
+    if(gameGateOpen.length)focus.push({tone:'warn',title:`${gameGateOpen.length} Game còn Hard Gate mở`,detail:'Cần đóng Hard Gate trước khi ra quyết định đi tiếp.',view:'games'});
+    if(highRiskDeals.length)focus.push({tone:'warn',title:`${highRiskDeals.length} Deal rủi ro cao`,detail:'Điểm rủi ro ≥50/100; cần rà lại bảo vệ, vốn và Revenue Share.',view:'deals'});
+    if(opAttention.length)focus.push({tone:'warn',title:`${opAttention.length} Project cần review Gate`,detail:'Có trạng thái Hold / Test thêm / Fail / Stop trong vận hành sau Deal.',view:'operations'});
+    if(!focus.length)focus.push({tone:'good',title:'Không có cảnh báo ưu tiên cao',detail:'Dữ liệu hiện tại chưa ghi nhận blocker hoặc rủi ro cần can thiệp ngay.',view:'dashboard'});
 
     const marketCards=[...marketP1,...marketP2].sort((a,b)=>(b.score??-1)-(a.score??-1)).slice(0,5).map(x=>`<button class="exec-list-row" data-open-market="${esc(x.m.Mechanic_ID)}"><div><b>${esc(x.m.Mechanic)}</b><small>${esc(x.direction.label)} · ${esc(x.trend.label)}</small></div><strong>${x.score===null?'—':fmt(x.score,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có market P1/P2 đủ dữ liệu.</div>';
 
@@ -611,40 +611,41 @@
     const opRoad=OPERATION_ROADMAP.map((s,i)=>`<div class="exec-op-step op-${i}"><span>${esc(s.code)}</span><b>${esc(s.title)}</b><strong>${opStageCounts[i]||0}</strong></div>`).join('');
 
     const summaryParts=[];
-    if(marketP1.length)summaryParts.push(`${marketP1.length} market P1 cần chủ động`);
-    if(gameProceed.length+gameConditional.length)summaryParts.push(`${gameProceed.length+gameConditional.length} game có tín hiệu đi tiếp`);
-    if(activeDeals.length)summaryParts.push(`${activeDeals.length} deal đang theo dõi`);
-    if(projects.length)summaryParts.push(`${projects.length} project sau Deal`);
-    const executiveSummary=summaryParts.length?summaryParts.join(' · '):'Hệ thống đang chờ thêm dữ liệu vận hành để tạo executive summary.';
+    if(marketP1.length+marketP2.length)summaryParts.push(`${marketP1.length+marketP2.length} cơ hội thị trường P1/P2`);
+    if(gameProceed.length+gameConditional.length)summaryParts.push(`${gameProceed.length+gameConditional.length} game có thể đi tiếp`);
+    if(activeDeals.length)summaryParts.push(`${activeDeals.length} Deal đang theo dõi`);
+    if(projects.length)summaryParts.push(`${projects.length} dự án sau Deal`);
+    let executiveSummary=summaryParts.length?`Hiện có ${summaryParts.join(', ')}.`:'Chưa đủ dữ liệu để tạo tóm tắt điều hành.';
+    if(attentionCount)executiveSummary+=` Có ${attentionCount} vấn đề cần xem xét.`;
 
     content.innerHTML=`<div class="exec-dashboard">
-      <section class="exec-hero"><div class="exec-hero-copy"><div class="exec-hero-kicker">SAVA PUBLISHING OS</div><h2>Executive Overview</h2><p>${esc(executiveSummary)}</p><div class="exec-hero-meta"><span><b>${attentionCount}</b> điểm cần lưu ý</span><span><b>${marketP1.length+marketP2.length}</b> market P1/P2</span><span><b>${scaleProjects}</b> project ở Scale</span></div></div><img src="assets/sava-logo.png" alt="SAVA" class="exec-hero-logo"></section>
+      <section class="exec-hero"><div class="exec-hero-copy"><div class="exec-hero-kicker">SAVA PUBLISHING OS</div><h2>Tổng quan SAVA Publishing</h2><p>${esc(executiveSummary)}</p><div class="exec-hero-meta"><span><b>${attentionCount}</b> vấn đề cần xem xét</span><span><b>${marketP1.length}</b> P1 · <b>${marketP2.length}</b> P2</span><span><b>${scaleProjects}</b> dự án ở Scale</span></div></div><img src="assets/sava-logo.png" alt="SAVA" class="exec-hero-logo"></section>
 
       <div class="exec-metric-grid">
-        ${metric('Định hướng thị trường',`${marketP1.length} P1 · ${marketP2.length} P2`,topMarket?`${topMarket.m.Mechanic} · ${fmt(topMarket.score,1)}/100`:'Chưa đủ dữ liệu','cyan')}
-        ${metric('Sourcing',activeSourcing.length,`${qualified} Qualified · ${stuck.length} STUCK`,'blue')}
-        ${metric('Partner sẵn sàng',readyPartners.length,`${highPartnerRisks.length} high risk đang mở`,'purple')}
-        ${metric('Game có thể đi tiếp',gameProceed.length+gameConditional.length,`${gameGateOpen.length} Hard Gate cần xử lý`,'cyan')}
-        ${metric('Deal đang theo dõi',activeDeals.length,`${dealReady.length} có thể tiếp tục · ${highRiskDeals.length} risk cao`,'blue')}
-        ${metric('Publishing Operation',projects.length,`${scaleProjects} Scale · ${opAttention.length} cần review`,'purple')}
+        ${metric('Cơ hội thị trường',`${marketP1.length} P1 · ${marketP2.length} P2`,topMarket?`Ưu tiên: ${topMarket.m.Mechanic} · ${fmt(topMarket.score,1)}/100`:'Chưa đủ dữ liệu','cyan')}
+        ${metric('Lead đang xử lý',activeSourcing.length,`${qualified} Qualified · ${stuck.length} vượt SLA`,'blue')}
+        ${metric('Đối tác sẵn sàng',readyPartners.length,`${highPartnerRisks.length} rủi ro cao đang mở`,'purple')}
+        ${metric('Game đủ điều kiện',gameProceed.length+gameConditional.length,`${gameGateOpen.length} Hard Gate chưa đóng`,'cyan')}
+        ${metric('Deal đang theo dõi',activeDeals.length,`${dealReady.length} có thể tiếp tục · ${highRiskDeals.length} rủi ro cao`,'blue')}
+        ${metric('Dự án sau Deal',projects.length,`${scaleProjects} ở Scale · ${opAttention.length} cần review`,'purple')}
       </div>
 
       <div class="exec-layout-main">
-        <section class="panel exec-attention"><div class="panel-head"><div><h2>Việc Sếp cần chú ý</h2><p>Ưu tiên blocker, risk và quyết định cần can thiệp.</p></div><span class="exec-count">${attentionCount}</span></div><div class="panel-body exec-focus-list">${focus.slice(0,8).map(x=>`<button class="exec-focus ${x.tone}" data-dash-nav="${x.view}"><span></span><div><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div><i>→</i></button>`).join('')}</div></section>
-        <section class="panel"><div class="panel-head"><div><h2>Cơ hội thị trường ưu tiên</h2><p>P1/P2 theo Market Intelligence hiện tại.</p></div>${navLink('Xem Market','market')}</div><div class="panel-body exec-list">${marketCards}</div></section>
+        <section class="panel exec-attention"><div class="panel-head"><div><h2>Điểm cần xem xét</h2><p>Các blocker, rủi ro và quyết định cần ưu tiên theo dữ liệu hiện tại.</p></div><span class="exec-count">${attentionCount}</span></div><div class="panel-body exec-focus-list">${focus.slice(0,8).map(x=>`<button class="exec-focus ${x.tone}" data-dash-nav="${x.view}"><span></span><div><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div><i>→</i></button>`).join('')}</div></section>
+        <section class="panel"><div class="panel-head"><div><h2>Cơ hội thị trường ưu tiên</h2><p>Các mechanic P1/P2 theo Market Intelligence hiện tại.</p></div>${navLink('Xem Market','market')}</div><div class="panel-body exec-list">${marketCards}</div></section>
       </div>
 
-      ${panel('Funnel Publishing',`<div class="exec-flow">${flow}</div><div class="exec-flow-note"><b>Lead → Scale:</b> ${sourcing.length?pct((reached.Scale||0)/sourcing.length,2):'—'} · <b>Deal → Test:</b> ${reached.Deal?pct((reached.Test||0)/reached.Deal,1):'—'} · <b>Cần xử lý:</b> ${stuck.length+overdue.length}</div>`,'Một flow xuyên suốt; stage lấy từ Sourcing và dùng chung cho các module downstream.',navLink('Xem Sourcing','sourcing'))}
+      ${panel('Tiến độ Funnel Publishing',`<div class="exec-flow">${flow}</div><div class="exec-flow-note"><b>Lead → Scale:</b> ${sourcing.length?pct((reached.Scale||0)/sourcing.length,2):'—'} · <b>Deal → Test:</b> ${reached.Deal?pct((reached.Test||0)/reached.Deal,1):'—'} · <b>Cần xử lý:</b> ${stuck.length+overdue.length}</div>`,'Tiến độ từ Lead đến Scale theo dữ liệu Sourcing dùng chung.',navLink('Xem Sourcing','sourcing'))}
 
       <div class="exec-three-col">
-        ${panel('Partner nổi bật',`<div class="exec-list">${topPartners}</div>`,'Xếp theo Partner Fit; Hard Gate vẫn override score.',navLink('Xem Partner','partners'))}
-        ${panel('Game nổi bật',`<div class="exec-list">${topGames}</div>`,'Xếp theo Pre-Scan trước Test.',navLink('Xem Game','games'))}
+        ${panel('Đối tác ưu tiên',`<div class="exec-list">${topPartners}</div>`,'Xếp theo Partner Fit; Hard Gate vẫn override score.',navLink('Xem Partner','partners'))}
+        ${panel('Game ưu tiên',`<div class="exec-list">${topGames}</div>`,'Xếp theo Pre-Scan trước Test.',navLink('Xem Game','games'))}
         ${panel('Deal & rủi ro',`<div class="exec-deal-summary"><div><span>Active Deal</span><b>${activeDeals.length}</b></div><div><span>Risk ≥50</span><b class="${highRiskDeals.length?'bad-text':''}">${highRiskDeals.length}</b></div><div><span>Có thể tiếp tục</span><b>${dealReady.length}</b></div></div><div class="exec-mini-note">Deal logic ưu tiên Hard Gate → RS → Risk/Protection → Capital → Readiness.</div>`,'Tóm tắt portfolio Deal.',navLink('Xem Deal','deals'))}
       </div>
 
-      ${panel('Publishing Roadmap',`<div class="exec-op-roadmap">${opRoad}</div><div class="exec-mini-note"><b>${projects.length}</b> project sau Deal · <b>${opAttention.length}</b> project đang có HOLD / TEST THÊM / FAIL / STOP.</div>`,'P0 → Product Test → Monetization → Expansion → Scale.',navLink('Xem Operation','operations'))}
+      ${panel('Lộ trình sau Deal',`<div class="exec-op-roadmap">${opRoad}</div><div class="exec-mini-note"><b>${projects.length}</b> project sau Deal · <b>${opAttention.length}</b> project đang có HOLD / TEST THÊM / FAIL / STOP.</div>`,'P0 → Product Test → Monetization → Expansion → Scale.',navLink('Xem Operation','operations'))}
 
-      ${panel('Hoạt động gần đây',(db.audit||[]).slice(0,8).map(a=>`<div class="exec-activity"><b>${esc(a.user)}</b><span>${esc(a.action)}</span><small>${esc(a.at)}</small></div>`).join('')||'<div class="empty">Chưa có hoạt động gần đây.</div>','Audit trail để theo dõi thay đổi quan trọng.')}
+      ${panel('Cập nhật gần đây',(db.audit||[]).slice(0,8).map(a=>`<div class="exec-activity"><b>${esc(a.user)}</b><span>${esc(a.action)}</span><small>${esc(a.at)}</small></div>`).join('')||'<div class="empty">Chưa có hoạt động gần đây.</div>','Lịch sử cập nhật dữ liệu quan trọng trên hệ thống.')}
     </div>`;
 
     bindOpeners();

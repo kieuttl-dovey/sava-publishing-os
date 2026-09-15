@@ -422,3 +422,10 @@ The files under `data/` are empty fallbacks and do not contain the migrated inte
 - Lead `STUCK` / quá hạn được highlight trực tiếp trong bảng hành động.
 - Screening, bottleneck, guideline và các bảng hiệu quả được làm gọn để giảm cảm giác spreadsheet và match visual system toàn web.
 - Không thay đổi logic / dữ liệu / Supabase schema.
+
+## v0.26 — Readability & Executive UX correction
+- Fix sidebar duplicate/wrapped labels: `Tổng quan` and `Tài liệu nguồn` now render as clean single-line navigation items.
+- Increase typography scale across navigation, tables, badges, forms, Deal Making and executive views; dense tables use horizontal scrolling instead of shrinking text.
+- Rebuild Overview wording for management: `Tổng quan SAVA Publishing`, `Điểm cần xem xét`, clearer Vietnamese KPI labels and less internal/admin jargon.
+- Increase decision-card, market, funnel and roadmap readability while preserving the SAVA typography/color system.
+- Keep Roboto for operational text and Space Grotesk for headings/KPI, with SAVA Electric Blue / Azure / Cyan / Void / Iris palette.

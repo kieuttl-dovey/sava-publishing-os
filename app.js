@@ -300,6 +300,103 @@
   function formVal(root,name){return root.querySelector(`[name="${CSS.escape(name)}"]`)?.value??'';}
   function formNum(root,name){const v=formVal(root,name); return v===''?null:Number(v);}
 
+  const PARTNER_GATE_LABELS={
+    legalContract:'Pháp lý / Hợp đồng',ipSourceRights:'IP / source code rights',publisherConflict:'Publisher conflict',dataTransparency:'Data transparency',teamContinuity:'Team continuity',compliance:'Compliance'
+  };
+  const PARTNER_EVIDENCE_LABELS={
+    trackRecord:'Track Record',team:'Team Structure',capacity:'Production Capacity',cadence:'Development Cadence',milestone:'Milestone Reliability',liveOps:'LiveOps Scalability',dataTech:'Data & Tech',collaboration:'Collaboration',publisherHistory:'Publisher History',deal:'Deal Evidence',legalIp:'Legal / IP',strategicFit:'Strategic Fit',longTerm:'Long-term Pipeline'
+  };
+  const PARTNER_SCORE_LABELS={trackRecord:'Track Record',team:'Team',production:'Production',dataTech:'Data & Tech',collaboration:'Collaboration',strategicFit:'Strategic Fit',longTerm:'Long-term'};
+
+  function clipText(v,max=180){
+    const t=String(v||'').replace(/\s+/g,' ').trim();
+    return t.length>max?`${t.slice(0,max-1).trim()}…`:t;
+  }
+  function unique(items){return [...new Set((items||[]).filter(Boolean))];}
+  function bullets(items,fallback='—'){const x=unique(items);return x.length?x.map(v=>`• ${v}`).join('\n'):fallback;}
+
+  function partnerDraftFromForm(root,p,scoreFields,evidenceFields){
+    const draft=clone(p||{});draft.id=formVal(root,'id')||p?.id||'';
+    draft.profile={...(draft.profile||{})};
+    const map={'Tên Partner / Studio':'name','Quốc gia':'country','Founder / Đầu mối chính':'contact','Quy mô team':'teamSize','Genre chính':'genres','Platform chính':'platform','Dự án đang đánh giá':'projects','Nguồn':'source','Owner Publishing':'owner','Trạng thái':'status','Mô hình hợp tác tài chính':'dealModel','Mức cam kết đầu tư cho Partner':'partnerCommit','Cam kết UA / Marketing Spend':'uaCommit','Điều kiện cam kết UA':'uaCond','Ghi chú':'profileNotes'};
+    Object.entries(map).forEach(([k,n])=>draft.profile[k]=formVal(root,n)||null);
+    draft.profile['Partner ID']=draft.id;draft.profile['Rev Share SAVA (%)']=formNum(root,'savaShare');draft.profile['Rev Share Partner (%)']=formNum(root,'partnerShare');
+    draft.hardGate={...(draft.hardGate||{})};
+    Object.keys(PARTNER_GATE_LABELS).forEach(k=>draft.hardGate[k]=formVal(root,`gate_${k}`));
+    draft.hardGate.evidence=formVal(root,'gateEvidence');draft.hardGate.owner=formVal(root,'gateOwner');draft.hardGate.dueDate=formVal(root,'gateDue');
+    draft.evidence={...(draft.evidence||{})};
+    evidenceFields.forEach(([k])=>draft.evidence[k]={text:formVal(root,`ev_${k}_text`),status:formVal(root,`ev_${k}_status`)});
+    draft.evidence.sourceUpdated=formVal(root,'evSource');draft.evidence.followUp=formVal(root,'evFollow');
+    draft.scores={...(draft.scores||{})};scoreFields.forEach(([k])=>draft.scores[k]=formNum(root,`score_${k}`));
+    return draft;
+  }
+
+  function generatePartnerDecision(p,originalId=''){
+    const d=partnerDerived(p),s=p.scores||{},e=p.evidence||{};
+    const hardPending=[],hardFailed=[];
+    Object.entries(PARTNER_GATE_LABELS).forEach(([k,label])=>{
+      const status=p.hardGate?.[k]||'Chờ xác minh';
+      if(status==='Không đạt')hardFailed.push(label);
+      else if(status!=='Đạt')hardPending.push(label);
+    });
+    const scoreItems=[
+      ['trackRecord',num(s.trackRecord)],['team',num(s.team)],['production',num(d.production)],['dataTech',num(s.dataTech)],['collaboration',num(s.collaboration)],['strategicFit',num(s.strategicFit)],['longTerm',num(s.longTerm)]
+    ];
+    const strengths=[];
+    scoreItems.filter(([,v])=>v!==null&&v>=4).sort((a,b)=>b[1]-a[1]).slice(0,4).forEach(([k,v])=>strengths.push(`${PARTNER_SCORE_LABELS[k]} nổi bật (${fmt(v,1)}/5).`));
+    ['trackRecord','team','capacity','dataTech','collaboration','deal','strategicFit','longTerm'].forEach(k=>{
+      const item=e[k];if(item?.text&&evidenceValid(item.status)&&strengths.length<6)strengths.push(`${PARTNER_EVIDENCE_LABELS[k]}: ${clipText(item.text)}${item.status?` (${item.status})`:''}.`);
+    });
+    if(!strengths.length&&d.fit!==null&&d.fit>=65)strengths.push(`Partner Fit hiện tại ${fmt(d.fit,1)}/100 (${d.classification}).`);
+
+    const risks=[];
+    hardFailed.forEach(x=>risks.push(`Hard Gate KHÔNG ĐẠT: ${x}.`));
+    hardPending.forEach(x=>risks.push(`Hard Gate chưa xác minh: ${x}.`));
+    (d.missing||[]).forEach(k=>risks.push(`Thiếu Minimum Evidence: ${PARTNER_EVIDENCE_LABELS[k]||k}.`));
+    scoreItems.filter(([,v])=>v!==null&&v<=2.5).sort((a,b)=>a[1]-b[1]).slice(0,3).forEach(([k,v])=>risks.push(`Score thấp: ${PARTNER_SCORE_LABELS[k]} ${fmt(v,1)}/5.`));
+    const linkedRisks=(db.partnerRisks||[]).filter(r=>(r.partnerId===p.id||r.partnerId===originalId)&&r.status!=='Đã đóng').sort((a,b)=>(num(b.score)||0)-(num(a.score)||0));
+    linkedRisks.filter(r=>['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score))).slice(0,3).forEach(r=>risks.push(`Risk ${r.level||riskLevel(r.score)}: ${clipText(r.risk,140)}.`));
+    if(d.confidence!=='Cao'&&d.coverage<.75)risks.push(`Evidence coverage ${pct(d.coverage,0)}, confidence ${d.confidence}.`);
+
+    const conditions=[];
+    if(hardFailed.length)conditions.push(`Không chuyển stage cho tới khi xử lý các Hard Gate không đạt hoặc có quyết định dừng chính thức: ${hardFailed.join(', ')}.`);
+    if(hardPending.length)conditions.push(`Xác minh các Hard Gate còn pending: ${hardPending.join(', ')}.`);
+    if((d.missing||[]).length)conditions.push(`Hoàn tất Minimum Evidence Gate cho: ${(d.missing||[]).map(k=>PARTNER_EVIDENCE_LABELS[k]||k).join(', ')}.`);
+    const highOpen=linkedRisks.filter(r=>['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score)));
+    if(highOpen.length)conditions.push(`Có mitigation/owner rõ ràng cho ${highOpen.length} risk Cao/Nghiêm trọng đang mở.`);
+    if(d.fit===null)conditions.push('Hoàn tất đầy đủ score input 1–5 để tính Partner Fit /100.');
+    if(!conditions.length)conditions.push('Hard Gate và Minimum Evidence Gate đã đạt; không có blocking condition từ logic hiện tại.');
+    conditions.push('Hard Gate là điều kiện chặn và không được bù bởi Partner Fit score.');
+
+    let recommendation='Chờ hoàn thiện đánh giá',status='Chờ review';
+    if(d.hard==='KHÔNG ĐẠT'){recommendation='Không tiếp tục';status='Bị chặn';}
+    else if(d.hard==='CHỜ XÁC MINH'){recommendation='Chờ xác minh Hard Gate';status='Chờ review';}
+    else if(d.minimumGate!=='ĐẠT'){recommendation='Tiếp tục có điều kiện';status='Chờ bổ sung evidence';}
+    else if(d.fit===null){recommendation='Chờ hoàn thiện đánh giá';status='Chờ chấm điểm';}
+    else if(d.fit>=85){recommendation='Ưu tiên tiếp tục';status='Sẵn sàng phê duyệt';}
+    else if(d.fit>=75){recommendation='Tiếp tục';status='Sẵn sàng phê duyệt';}
+    else if(d.fit>=65){recommendation='Tiếp tục có điều kiện';status='Review có điều kiện';}
+    else {recommendation='Cần xem xét thêm';status='Chờ review';}
+
+    const projectScope=profile(p,'Dự án đang đánh giá');
+    let nextAction='Review lại hồ sơ Partner và cập nhật các dữ liệu còn thiếu.';
+    if(hardFailed.length)nextAction=`Decision owner review Hard Gate không đạt (${hardFailed.join(', ')}) và chốt hướng reject hoặc remediation trước khi tiếp tục.`;
+    else if(hardPending.length)nextAction=`Hoàn tất DD/xác minh ${hardPending.join(', ')}; sau đó generate lại Decision.`;
+    else if((d.missing||[]).length)nextAction=`Bổ sung và xác minh evidence cho ${(d.missing||[]).map(k=>PARTNER_EVIDENCE_LABELS[k]||k).join(', ')}; sau đó review lại Minimum Evidence Gate.`;
+    else if(d.fit===null)nextAction='Hoàn tất score input 1–5 và review Partner Fit trước khi ra quyết định.';
+    else if(d.fit<65)nextAction='Review các hạng mục score thấp và strategic fit; chỉ mở bước tiếp theo khi có đủ lý do business để tiếp tục.';
+    else if(d.fit<75)nextAction=`Chốt các condition/risk còn mở rồi chuyển sang Game Selection${projectScope?` cho ${projectScope}`:''}.`;
+    else nextAction=`Chuyển sang Game Selection${projectScope?` cho ${projectScope}`:' cho các game trong scope'}; tiếp tục monitor risk mở trong quá trình evaluation.`;
+
+    return {
+      recommendation,status,
+      strengths:bullets(strengths,'Chưa có strength đủ rõ từ evidence/score hiện tại.'),
+      risks:bullets(risks,'Không có risk nổi bật được phát hiện từ Hard Gate, Evidence, Score và Risk Register hiện tại.'),
+      conditions:bullets(conditions),nextAction,
+      meta:{hard:d.hard,minimumGate:d.minimumGate,fit:d.fit,classification:d.classification,coverage:d.coverage,confidence:d.confidence}
+    };
+  }
+
   function openPartner(id){
     let p=byId(db.partners,id); const isNew=!p;
     if(!p) p={id:`P${String(db.partners.length+1).padStart(3,'0')}`,profile:{},hardGate:{},evidence:{},scores:{},scorecard:{},decision:{}};
@@ -312,7 +409,7 @@
       <div class="section-title">Hard Gate</div><div class="form-grid three-cols">${[['legalContract','Pháp lý / Hợp đồng'],['ipSourceRights','IP / source code rights'],['publisherConflict','Publisher conflict'],['dataTransparency','Data transparency'],['teamContinuity','Team continuity'],['compliance','Compliance']].map(([k,l])=>fSelect(`gate_${k}`,l,p.hardGate?.[k]||'Chờ xác minh',GATE_STATUS)).join('')}${fArea('gateEvidence','Gate evidence / notes',p.hardGate?.evidence||'')}${fText('gateOwner','Gate owner',p.hardGate?.owner||'')}${fText('gateDue','Gate due date',p.hardGate?.dueDate||'','','date')}</div>
       <div class="section-title">Evidence & status</div><div class="form-grid">${evidenceFields.map(([k,l])=>`${fArea(`ev_${k}_text`,l,p.evidence?.[k]?.text||'')}${fSelect(`ev_${k}_status`,`${l} · status`,p.evidence?.[k]?.status||'',EVIDENCE_STATUS)}`).join('')}${fText('evSource','Source / updated',p.evidence?.sourceUpdated||'','full')}${fArea('evFollow','Follow-up / owner',p.evidence?.followUp||'')}</div>
       <div class="section-title">Score input 1–5</div><div class="form-grid three-cols">${scoreFields.map(([k,l])=>fText(`score_${k}`,l,p.scores?.[k]??'','','number')).join('')}</div>
-      <div class="section-title">Decision</div><div class="form-grid">${fText('decisionReco','Final recommendation',p.decision?.recommendation||'')}${fText('decisionStatus','Decision status',p.decision?.status||'')}${fArea('strengths','Strengths',p.decision?.strengths||'')}${fArea('risks','Risks',p.decision?.risks||'')}${fArea('conditions','Conditions before next stage',p.decision?.conditions||'')}${fArea('nextAction','Next action',p.decision?.nextAction||'')}${fText('decisionOwner','Decision owner',p.decision?.owner||'')}${fText('decisionDate','Decision date',p.decision?.decisionDate?.slice?.(0,10)||p.decision?.decisionDate||'','','date')}${fArea('decisionNotes','Decision notes',p.decision?.notes||'')}</div>`;
+      <div class="section-title-row"><div class="section-title">Decision</div><button type="button" class="ghost decision-generate" data-generate-partner-decision>✨ Generate Decision</button></div><div class="notice decision-helper">Generate từ <b>Hard Gate + Minimum Evidence + Partner Fit + Risk Register</b> theo dữ liệu hiện tại trong form. Kết quả vẫn có thể sửa tay trước khi Save.</div><div class="form-grid decision-grid">${fText('decisionReco','Final recommendation',p.decision?.recommendation||'')}${fText('decisionStatus','Decision status',p.decision?.status||'')}${fArea('strengths','Strengths',p.decision?.strengths||'')}${fArea('risks','Risks',p.decision?.risks||'')}${fArea('conditions','Conditions before next stage',p.decision?.conditions||'')}${fArea('nextAction','Next action',p.decision?.nextAction||'')}${fText('decisionOwner','Decision owner',p.decision?.owner||'')}${fText('decisionDate','Decision date',p.decision?.decisionDate?.slice?.(0,10)||p.decision?.decisionDate||'','','date')}${fArea('decisionNotes','Decision notes',p.decision?.notes||'')}</div>`;
     modal(isNew?'Add partner':`${p.id} · ${profile(p,'Tên Partner / Studio')||'Partner'}`,body,(root)=>{
       const oldId=p.id; p.id=formVal(root,'id')||oldId;
       const map={'Tên Partner / Studio':'name','Quốc gia':'country','Founder / Đầu mối chính':'contact','Quy mô team':'teamSize','Genre chính':'genres','Platform chính':'platform','Dự án đang đánh giá':'projects','Nguồn':'source','Owner Publishing':'owner','Trạng thái':'status','Mô hình hợp tác tài chính':'dealModel','Mức cam kết đầu tư cho Partner':'partnerCommit','Cam kết UA / Marketing Spend':'uaCommit','Điều kiện cam kết UA':'uaCond','Ghi chú':'profileNotes'};
@@ -321,10 +418,24 @@
       p.evidence=p.evidence||{}; evidenceFields.forEach(([k])=>p.evidence[k]={text:formVal(root,`ev_${k}_text`),status:formVal(root,`ev_${k}_status`)});p.evidence.sourceUpdated=formVal(root,'evSource');p.evidence.followUp=formVal(root,'evFollow');
       p.scores=p.scores||{}; scoreFields.forEach(([k])=>p.scores[k]=formNum(root,`score_${k}`));
       p.decision={...(p.decision||{}),recommendation:formVal(root,'decisionReco'),status:formVal(root,'decisionStatus'),strengths:formVal(root,'strengths'),risks:formVal(root,'risks'),conditions:formVal(root,'conditions'),nextAction:formVal(root,'nextAction'),owner:formVal(root,'decisionOwner'),decisionDate:formVal(root,'decisionDate'),notes:formVal(root,'decisionNotes'),updatedAt:new Date().toISOString()};
+      if(root.dataset.decisionGenerated==='1'){p.decision.autoGenerated=true;p.decision.generatedAt=new Date().toISOString();p.decision.generationRule='Hard Gate + Minimum Evidence + Partner Fit + Risk Register';}
       const der=partnerDerived(p); p.hardGate.result=der.hard;p.evidence.coverage=der.coverage;p.evidence.confidence=der.confidence;p.evidence.minimumGate=der.minimumGate;p.scores.productionComposite=der.production;p.scorecard={...(p.scorecard||{}),partnerFit:der.fit,classification:der.classification,finalConclusion:der.final};
       if(isNew) db.partners.push(p); else if(oldId!==p.id){db.partnerRisks.forEach(r=>{if(r.partnerId===oldId)r.partnerId=p.id;});db.deals.forEach(d=>{if(d.partnerId===oldId)d.partnerId=p.id;});db.sourcing.forEach(s=>{if(s.partnerId===oldId)s.partnerId=p.id;});}
       modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} partner ${p.id}`);
     },{wide:true});
+    const partnerModal=modalRoot.querySelector('.modal');
+    const genBtn=partnerModal?.querySelector('[data-generate-partner-decision]');
+    if(genBtn&&window.SAVA_SUPABASE?.configured&&!window.SAVA_SUPABASE.canEdit())genBtn.disabled=true;
+    if(genBtn&&!genBtn.disabled)genBtn.onclick=()=>{
+      const draft=partnerDraftFromForm(partnerModal,p,scoreFields,evidenceFields);
+      const generated=generatePartnerDecision(draft,p.id);
+      const set=(name,value)=>{const el=partnerModal.querySelector(`[name="${name}"]`);if(el)el.value=value??'';};
+      set('decisionReco',generated.recommendation);set('decisionStatus',generated.status);set('strengths',generated.strengths);set('risks',generated.risks);set('conditions',generated.conditions);set('nextAction',generated.nextAction);
+      partnerModal.dataset.decisionGenerated='1';
+      const helper=partnerModal.querySelector('.decision-helper');
+      if(helper)helper.textContent=`Generated từ dữ liệu hiện tại · Hard Gate ${generated.meta.hard} · Evidence ${generated.meta.minimumGate} · Partner Fit ${generated.meta.fit??'NE'}/100 · Coverage ${pct(generated.meta.coverage,0)} · Confidence ${generated.meta.confidence}. Có thể sửa tay trước khi Save.`;
+      toast('Decision generated from current Partner data');
+    };
   }
 
   function openRisk(id){ const r=byId(db.partnerRisks,id); }

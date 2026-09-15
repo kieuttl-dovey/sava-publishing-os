@@ -1,4 +1,4 @@
-# SAVA Publishing OS v0.2 — Supabase Team Edition
+# SAVA Publishing OS v0.3 — Partner Decision Automation
 
 A lightweight internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
 
@@ -7,7 +7,7 @@ This version uses **Supabase Auth + Postgres** as the shared source of truth. Gi
 ## What is included
 
 - **Dashboard**: portfolio counts, sourcing funnel, game recommendations, partner decisions, active project gates, and recent database activity.
-- **1. Partner Selection**: partner master, hard gates, evidence coverage/confidence, weighted Partner Fit score, decision, and risk log.
+- **1. Partner Selection**: partner master, hard gates, evidence coverage/confidence, weighted Partner Fit score, risk log, and **Generate Decision** automation that derives Recommendation / Status / Strengths / Risks / Conditions / Next Action from the current form data.
 - **2. Deal Making**: Rev Share, MG/upfront, recoup, rights/control, KPI, responsibilities, exit/stop conditions, and negotiation fields.
 - **3. Market Intelligence**: mechanic/UA benchmark plus editable Publisher Landscape.
 - **4. Game Selection**: intake, Market Fit, Product Evidence, Publishing Readiness, Deal Economics, SAVA Publishing Fit, Pre-Scan/Post-Test score, hard-gate logic, and recommendation.
@@ -23,6 +23,8 @@ Roles:
 - **Admin**: read/write/delete, full database import, user-role administration through Supabase.
 - **Editor**: read/write business records; destructive deletes are blocked by RLS.
 - **Viewer**: read-only.
+
+Partner Decision generation is performed in-browser from the current unsaved form values, then remains editable until the user presses **Save**.
 
 The browser saves edits to Supabase. The app also refreshes from the shared database every 60 seconds while visible and provides a manual **Refresh** button.
 

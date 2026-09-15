@@ -34,3 +34,5 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{displ
 .auth-form{display:grid;gap:14px;margin-top:24px}.auth-form label{display:grid;gap:7px;font-size:13px;font-weight:700}.auth-form input{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff}.auth-form button{margin-top:4px;padding:11px 14px}
 .auth-message{min-height:20px;font-size:13px;color:var(--muted)}.bad-text{color:var(--bad)!important}
 button:disabled,input:disabled,select:disabled,textarea:disabled{cursor:not-allowed;opacity:.58}
+.section-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:22px;border-top:1px solid var(--line);padding-top:4px}.section-title-row .section-title{margin:0;border-top:0;padding-top:0}.decision-generate{white-space:nowrap;padding:8px 11px}.decision-helper{margin:10px 0 13px}.decision-grid textarea{min-height:92px}
+@media (max-width:760px){.section-title-row{align-items:stretch;flex-direction:column}.decision-generate{width:100%}}

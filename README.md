@@ -1,3 +1,15 @@
+# v0.19 — Market Priority P1 → P5 + rule hiển thị ngoài màn hình
+
+- Chuẩn hóa **Định hướng Market** thành thứ tự ưu tiên giảm dần: **P1 → P2 → P3 → P4 → P5**.
+- **P1 · Ưu tiên chủ động**: Sức hấp dẫn ≥75, xu hướng Bứt phá/Tăng trưởng tốt và SAVA Fit ≥70. Chủ động tìm game/đối tác và fast-track opportunity phù hợp.
+- **P2 · Ưu tiên kiểm chứng**: Sức hấp dẫn ≥70 + tín hiệu tích cực nhưng chưa đủ điều kiện P1. Ưu tiên test để xác minh trước khi mở rộng sourcing.
+- **P3 · Theo dõi chọn lọc**: Market suy giảm nhưng Khả năng kiếm tiền ≥60/100.
+- **P4 · Theo dõi thêm**: Có tín hiệu nhưng chưa đủ mạnh/đồng thuận để ưu tiên kiểm chứng.
+- **P5 · Chưa ưu tiên**: Tín hiệu tổng thể yếu hoặc suy giảm + monetization yếu.
+- **Bổ sung dữ liệu** nằm ngoài P1–P5.
+- Rule được hiển thị trực tiếp phía trên **Bản đồ cơ hội SAVA**, không cần mở Edit mới hiểu cách xếp nhóm.
+- Ngưỡng P1 giảm từ 80 xuống **75** để tránh cliff effect giữa market 79.x và 80.0.
+
 # SAVA Publishing OS v0.17 — Connected Data / One Source of Truth
 
 ## Double-check với file nguồn
@@ -316,25 +328,3 @@ The files under `data/` are empty fallbacks and do not contain the migrated inte
 - Missing SAVA Fit now remains **Chưa nhập** and does **not** block `Ưu tiên kiểm thử`.
 - `Ưu tiên tìm kiếm game/đối tác` still requires SAVA Fit >= 70/100.
 - Expected current examples: `Block / Slide / Jam` and `Sort / Flow` move to **Ưu tiên kiểm thử** when SAVA Fit is blank.
-
----
-
-## v0.18 — Connected source-of-truth + private Excel library
-
-### Cross-module corrections
-
-The tool now treats all five source workbooks as one Publishing OS instead of independent tabs.
-
-- **Market Attractiveness /100 is market-only.** It uses market Size, Growth/Momentum, Monetization and UA evidence. The original Game Selection framework also contains Entry Accessibility; when that input is not standardized in the Market view, the tool omits it instead of inventing a value and re-normalizes the remaining available market inputs.
-- **Strategic fit with SAVA /100** is taken from the Sourcing workbook (`07_Market_Intel_Ref`): direct strategic focus = 100, adjacent = 60, outside focus = 20.
-- **Execution capability evidence /100** is shown separately and is derived from Game Selection's `SAVA Publishing Fit` for Game/Candidates in the same mechanic. It is evidence of proven capability, not Market Attractiveness.
-- **Sourcing's market-fit field** now remains strategic alignment (as defined by the Sourcing workbook) and can additionally show Market Intelligence direction/attractiveness. It no longer substitutes Market Attractiveness for strategic fit.
-- **Deal terms** remain owned by Deal Making; Partner views only reuse linked Deal outputs.
-
-### Source workbook library
-
-A new **Tài liệu nguồn** page lists the five original workbooks, their owning modules, sheet counts and formula counts. Files are intended to be stored in the private Supabase Storage bucket `publishing-source-workbooks`.
-
-Run `SAVA_Publishing_OS_v0.18_Source_Files_Storage.sql` once in Supabase SQL Editor. Then log in as Admin, open **Tài liệu nguồn**, and upload each original workbook. Authenticated users can then download the exact original workbook from the tool. The files are not put in the public GitHub Pages repository.
-
-Because the original workbook bytes are uploaded unchanged, Excel formulas and the `.xlsm` macro container are preserved exactly as supplied.

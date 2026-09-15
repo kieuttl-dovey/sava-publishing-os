@@ -1,3 +1,27 @@
+# v0.21 — Market Intelligence dùng chung Strategic Fit + Execution Fit
+
+Bản này sửa logic Market theo mô hình **một Publishing OS / một nguồn dữ liệu dùng chung** và đối chiếu đồng thời với các workbook nguồn, đặc biệt `SAVA_Sourcing_Funnel_KPI_Thuan_Viet(1).xlsx` và Game Selection.
+
+## Thay đổi chính
+
+- **Sức hấp dẫn thị trường /100 là market-only**: Quy mô 30 · Đà tăng trưởng 25 · Khả năng kiếm tiền 20 · UA 15. Fit nội bộ SAVA không còn được cộng vào Market Score. Metric thiếu được bỏ khỏi mẫu số và các trọng số market còn lại tự chuẩn hóa.
+- Tách `SAVA Fit` thành 2 lớp dùng chung:
+  - **Phù hợp chiến lược SAVA /100** — nguồn Sourcing `07_Market_Intel_Ref`: Đúng trọng tâm = 100, Hướng liền kề = 60, Ngoài trọng tâm = 20.
+  - **Năng lực thực thi đã chứng minh /100** — nguồn Game Selection: trung bình SAVA Publishing Fit của Game/Candidate cùng mechanic; thiếu evidence để trống, không quy thành 0.
+- Mapping chiến lược tự động theo taxonomy nguồn: Puzzle MECH-001–012 = 100; Simulation MECH-013–022 = 100; RPG/TD MECH-025, 028–030 = 100; Strategy liền kề MECH-026–027 = 60; Cross-category/QA = N/A.
+- **P1 · Ưu tiên chủ động**: Market >=75 + Bứt phá/Tăng trưởng tốt + Strategic Fit >=70.
+- **P2 · Ưu tiên kiểm chứng** có thêm các guardrail để tránh cliff effect:
+  - Market >=70 + trend tích cực + không ngoài trọng tâm; hoặc
+  - Market >=65 + Strategic Fit >=85 + trend tích cực; hoặc
+  - Market >=60 + Strategic Fit >=85 + Execution Fit >=85 + tín hiệu tích cực; hoặc
+  - Market >=60 + Strategic Fit >=85 + một Growth metric >=50% trong khi metric còn lại thiếu + Monetization và UA đều >=60.
+- Case thực tế theo dữ liệu nguồn: `Block / Slide / Jam` -> P1; `Sort / Flow` -> P2; `Idle RPG / AFK Progression` -> P2 nhờ Strategic Fit cao + Execution Fit đã chứng minh; `Tycoon / Economy Management` -> P2 dù thiếu Revenue Growth 3M vì DL Growth mạnh + economics tốt + Simulation là trọng tâm; `Tower Defense / Defense RPG` -> P3 vì market suy giảm nhưng khả năng kiếm tiền vẫn tốt.
+- Edit Mechanic hiển thị chi tiết rule: Xu hướng 3M, Khả năng kiếm tiền, Strategic Fit, Execution Fit và P1–P5, đồng thời ghi rõ module sở hữu dữ liệu.
+
+Không cần migration SQL cho v0.21.
+
+---
+
 # v0.20 — Sourcing UI/UX refresh + Market Priority P1 → P5
 
 - Chuẩn hóa **Định hướng Market** thành thứ tự ưu tiên giảm dần: **P1 → P2 → P3 → P4 → P5**.

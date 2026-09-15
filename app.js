@@ -208,19 +208,39 @@
     return {avg5:avg5===null?null:Math.round(avg5*100)/100,score,coverage:present.length,components};
   }
   function normalizeMechanicName(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,' ');}
-  function mechanicSavaFit(mechanic){
+  const STRATEGIC_PUZZLE_IDS=new Set(['MECH-001','MECH-002','MECH-003','MECH-004','MECH-005','MECH-006','MECH-007','MECH-008','MECH-009','MECH-010','MECH-011','MECH-012']);
+  const STRATEGIC_SIMULATION_IDS=new Set(['MECH-013','MECH-014','MECH-015','MECH-016','MECH-017','MECH-018','MECH-019','MECH-020','MECH-021','MECH-022']);
+  const STRATEGIC_RPG_TD_IDS=new Set(['MECH-025','MECH-028','MECH-029','MECH-030']);
+  const STRATEGIC_ADJACENT_IDS=new Set(['MECH-026','MECH-027']);
+  function mechanicStrategicFit(m){
+    const id=String(m?.Mechanic_ID||'').trim(),name=String(m?.Mechanic||'').trim();
+    if(id==='MECH-023'||/cross-category|qa queue/i.test(name))return {score:null,group:'Không áp dụng',level:'N/A',source:'Sourcing 07_Market_Intel_Ref',note:'Đây là nhóm phân loại/QA, không phải một mechanic chiến lược để chấm Fit.'};
+    if(STRATEGIC_PUZZLE_IDS.has(id))return {score:100,group:'Puzzle',level:'Cao — Đúng trọng tâm',source:'Sourcing 07_Market_Intel_Ref',note:'Puzzle là trọng tâm chiến lược; taxonomy MECH-001–012 được dùng để mapping Sourcing.'};
+    if(STRATEGIC_SIMULATION_IDS.has(id))return {score:100,group:'Simulation',level:'Cao — Đúng trọng tâm',source:'Sourcing 07_Market_Intel_Ref',note:'Mechanic được mapping vào nhóm Simulation — trọng tâm chiến lược hiện tại.'};
+    if(STRATEGIC_RPG_TD_IDS.has(id))return {score:100,group:'RPG / TD',level:'Cao — Đúng trọng tâm',source:'Sourcing 07_Market_Intel_Ref',note:'RPG / TD là trọng tâm chiến lược hiện tại.'};
+    if(STRATEGIC_ADJACENT_IDS.has(id))return {score:60,group:'Hyper / Strategy liền kề',level:'Trung bình — Liền kề',source:'Sourcing 07_Market_Intel_Ref',note:'Strategy độc lập nằm ngoài trọng tâm ban đầu; chỉ xem như hướng liền kề và cần bằng chứng mạnh hơn ở cấp game.'};
+    return {score:20,group:'Khác / Ngoài trọng tâm',level:'Thấp — Ngoài trọng tâm',source:'Sourcing 07_Market_Intel_Ref',note:'Không map được vào nhóm trọng tâm hiện tại; chỉ xem xét ngoại lệ khi bằng chứng đủ mạnh.'};
+  }
+  function mechanicStrategicFitHtml(info){
+    if(!info||info.score===null)return `<div class="shared-fit-card empty-fit"><div><span>Phù hợp chiến lược SAVA /100</span><strong>Không áp dụng</strong></div><p>${esc(info?.note||'Không có mapping chiến lược.')}</p></div>`;
+    return `<div class="shared-fit-card"><div class="shared-fit-head"><div><span>Phù hợp chiến lược SAVA /100 · Tự động</span><strong>${fmt(info.score,0)}/100</strong></div><span class="badge good">${esc(info.group)}</span></div><p><b>${esc(info.level)}</b>. ${esc(info.note)} Nguồn: ${esc(info.source)}. Đây là dữ liệu dùng chung từ Sourcing, không nhập lại tại Market Intelligence.</p></div>`;
+  }
+  function mechanicExecutionFit(mechanic){
     const key=normalizeMechanicName(mechanic);
     const games=(db.games||[]).filter(g=>normalizeMechanicName(intake(g,'Mechanic'))===key);
     const scored=games.map(g=>({g,fit:gameSavaFitDerived(g)})).filter(x=>x.fit.score!==null);
-    if(!scored.length)return {score:null,count:0,games:[],method:'Chưa có Game/Candidate cùng mechanic có SAVA Publishing Fit'};
-    const score=Math.round(scored.reduce((s,x)=>s+x.fit.score,0)/scored.length*10)/10;
+    if(!scored.length)return {score:null,count:0,games:[],method:'Chưa có Game/Candidate cùng mechanic có SAVA Publishing Fit đủ dữ liệu'};
+    const score=Math.round(scored.reduce((sum,x)=>sum+x.fit.score,0)/scored.length*10)/10;
     return {score,count:scored.length,games:scored,method:'Trung bình SAVA Publishing Fit của Game/Candidate cùng mechanic trong Game Selection'};
   }
-  function mechanicSavaFitHtml(fit){
-    if(!fit||fit.score===null)return `<div class="shared-fit-card empty-fit"><div><span>Phù hợp SAVA /100</span><strong>Chưa đủ dữ liệu</strong></div><p>Chưa có Game/Candidate cùng mechanic có đủ SAVA Publishing Fit trong Game Selection.</p></div>`;
+  function mechanicExecutionFitHtml(fit){
+    if(!fit||fit.score===null)return `<div class="shared-fit-card empty-fit"><div><span>Năng lực thực thi đã chứng minh /100</span><strong>Chưa đủ dữ liệu</strong></div><p>Chưa có Game/Candidate cùng mechanic có đủ SAVA Publishing Fit trong Game Selection. Đây không được quy thành 0.</p></div>`;
     const rows=fit.games.map(({g,fit:f})=>`<tr><td><b>${esc(intake(g,'Game_Title')||g.id)}</b><div class="small muted">${esc(g.id)} · ${esc(intake(g,'Studio')||'—')}</div></td><td>${marketScoreBar(f.score)}</td><td>${f.coverage}/7 tiêu chí</td></tr>`).join('');
-    return `<div class="shared-fit-card"><div class="shared-fit-head"><div><span>Phù hợp SAVA /100 · Tự động</span><strong>${fmt(fit.score,1)}/100</strong></div><span class="badge good">${fit.count} Game/Candidate</span></div><p>${esc(fit.method)}. Đây là dữ liệu dùng chung từ Game Selection, không nhập lại tại Market Intelligence.</p>${table(['Game / Candidate','SAVA Publishing Fit','Dữ liệu'],rows,'shared-fit-table')}</div>`;
+    return `<div class="shared-fit-card"><div class="shared-fit-head"><div><span>Năng lực thực thi đã chứng minh /100 · Tự động</span><strong>${fmt(fit.score,1)}/100</strong></div><span class="badge good">${fit.count} Game/Candidate</span></div><p>${esc(fit.method)}. Đây là evidence thực thi dùng chung từ Game Selection, không phải điểm chiến lược và không nhập lại ở Market Intelligence.</p>${table(['Game / Candidate','SAVA Publishing Fit','Dữ liệu'],rows,'shared-fit-table')}</div>`;
   }
+  // Backward-compatible alias for older internal calls. At mechanic level, this means Execution Fit, not Strategic Fit.
+  function mechanicSavaFit(mechanic){return mechanicExecutionFit(mechanic);}
+  function mechanicSavaFitHtml(fit){return mechanicExecutionFitHtml(fit);}
   function gameDerived(g){
     const s=g.scorecard||{};
     const market=weighted({size:s.marketSize,growth:s.growth,entry:s.entryAccess,mon:s.marketMonetization,ua:s.marketUaScalability},{size:20,growth:20,entry:25,mon:20,ua:15});
@@ -576,12 +596,14 @@
     return n>=80?'Rất tốt':n>=65?'Tốt':n>=50?'Trung bình':'Thấp';
   }
   function marketDirection(x){
-    // IMPORTANT: missing values must stay null. Number(null) === 0 would incorrectly
-    // treat an unfilled SAVA Fit as 0/100 and downgrade otherwise strong markets.
     const score=(x.score===null||x.score===undefined||x.score==='')?null:Number(x.score);
-    const fit=(x.savaFit===null||x.savaFit===undefined||x.savaFit==='')?null:Number(x.savaFit);
+    const strategic=(x.strategicFit===null||x.strategicFit===undefined||x.strategicFit==='')?null:Number(x.strategicFit);
+    const execution=(x.executionFit===null||x.executionFit===undefined||x.executionFit==='')?null:Number(x.executionFit);
     const trend=x.trend?.key||'na';
     const mon=(x.monetization===null||x.monetization===undefined||x.monetization==='')?null:Number(x.monetization);
+    const ua=(x.ua===null||x.ua===undefined||x.ua==='')?null:Number(x.ua);
+    const dl=(x.dlg===null||x.dlg===undefined||x.dlg==='')?null:Number(x.dlg);
+    const rev=(x.revg===null||x.revg===undefined||x.revg==='')?null:Number(x.revg);
     if(x.completeness<.34)return {key:'data',label:'Bổ sung dữ liệu',desc:'Chưa đủ dữ liệu thị trường để đưa ra định hướng đáng tin cậy.'};
 
     const declining=['decline','sharp-decline','rev-decline','user-decline'].includes(trend);
@@ -589,33 +611,45 @@
     const testTrend=['low-base','user-expand','rev-growth'].includes(trend);
     const splitTrend=['user-up-rev-down','rev-up-user-down'].includes(trend);
     const positiveTrend=strongTrend||testTrend;
+    const oneGrowthMissing=(dl===null)!==(rev===null);
+    const availableGrowth=dl===null?rev:rev===null?dl:null;
+    const partialPositive=oneGrowthMissing&&availableGrowth!==null&&availableGrowth>=.10;
+    const partialStrong=oneGrowthMissing&&availableGrowth!==null&&availableGrowth>=.50;
+    const economicsGood=mon!==null&&mon>=60&&ua!==null&&ua>=60;
 
-    // 1) Market đang co lại nhưng vẫn monetize tốt: không loại thẳng, chuyển sang theo dõi chọn lọc.
+    // P3: market co lại nhưng vẫn monetize tốt. Không loại thẳng một market trưởng thành/niche.
     if(declining){
       if(mon!==null&&mon>=60)return {key:'selective',label:'P3 · Theo dõi chọn lọc',desc:'Xu hướng 3M đang suy giảm nhưng khả năng kiếm tiền vẫn ở mức Tốt/Rất tốt. Chỉ xem xét game/đối tác có chất lượng cao hoặc lợi thế rõ; không tìm kiếm đại trà.'};
-      if(score!==null&&score>=65&&fit!==null&&fit>=80)return {key:'watch',label:'P4 · Theo dõi thêm',desc:'Market đang suy giảm nhưng vẫn rất phù hợp với SAVA; tiếp tục theo dõi trước khi phân bổ thêm nguồn lực.'};
+      if(score!==null&&score>=60&&strategic!==null&&strategic>=85&&execution!==null&&execution>=80)return {key:'watch',label:'P4 · Theo dõi thêm',desc:'Market đang suy giảm nhưng nằm đúng trọng tâm và SAVA đã có năng lực thực thi; tiếp tục theo dõi trước khi phân bổ thêm nguồn lực.'};
       return {key:'low',label:'P5 · Chưa ưu tiên',desc:'Xu hướng đang suy giảm và khả năng kiếm tiền chưa đủ mạnh; chưa nên dành nhiều nguồn lực.'};
     }
 
-    // 2) P1 là mức ưu tiên cao nhất: market tốt + trend khỏe + SAVA Fit đã được xác nhận.
-    // Dùng ngưỡng 75 thay vì 80 để tránh cliff effect giữa 79.x và 80.0.
-    if(score!==null&&score>=75&&fit!==null&&fit>=70&&strongTrend){
-      return {key:'priority',label:'P1 · Ưu tiên chủ động',desc:'Mức ưu tiên cao nhất. Market hấp dẫn, xu hướng tăng khỏe và SAVA Fit đã được xác nhận. Chủ động tìm game/đối tác và fast-track opportunity phù hợp vào đánh giá/kiểm thử.'};
+    // P1: mức ưu tiên cao nhất. Market tốt + trend khỏe + đúng trọng tâm chiến lược.
+    // Execution Fit là bằng chứng bổ sung, không bắt buộc để SAVA chủ động tìm opportunity mới.
+    if(score!==null&&score>=75&&strategic!==null&&strategic>=70&&strongTrend){
+      return {key:'priority',label:'P1 · Ưu tiên chủ động',desc:'Market hấp dẫn, xu hướng tăng khỏe và nằm trong hướng chiến lược SAVA. Chủ động tìm game/đối tác và fast-track opportunity phù hợp vào đánh giá/kiểm thử.'};
     }
 
-    // 3) P2: market đủ tốt để kiểm chứng dù SAVA Fit chưa nhập/chưa đủ để lên P1.
-    // Thiếu SAVA Fit chỉ chặn P1, không tự động hạ một market tốt xuống P4.
-    if(score!==null&&score>=70&&(
-      positiveTrend||(trend==='stable'&&mon!==null&&mon>=75)||(splitTrend&&mon!==null&&mon>=65)
-    )&&(fit===null||fit>=55)){
-      return {key:'test',label:'P2 · Ưu tiên kiểm chứng',desc:'Market có tín hiệu đủ tốt để ưu tiên kiểm chứng bằng game/test thực tế. Dùng kết quả kiểm chứng để xác nhận Product/Marketing Fit và SAVA Fit trước khi nâng lên P1.'};
+    // P2-A: market đủ tốt để kiểm chứng, miễn không nằm rõ ngoài trọng tâm.
+    if(score!==null&&score>=70&&(positiveTrend||(trend==='stable'&&mon!==null&&mon>=75)||(splitTrend&&mon!==null&&mon>=65))&&(strategic===null||strategic>=60)){
+      return {key:'test',label:'P2 · Ưu tiên kiểm chứng',desc:'Market đủ hấp dẫn để ưu tiên kiểm chứng bằng game/test thực tế, nhưng chưa đủ điều kiện P1.'};
+    }
+    // P2-B: lợi thế chiến lược mạnh giúp tránh cliff effect 69.x/70 khi trend tích cực.
+    if(score!==null&&score>=65&&strategic!==null&&strategic>=85&&positiveTrend){
+      return {key:'test',label:'P2 · Ưu tiên kiểm chứng',desc:'Market chưa vượt ngưỡng 70 nhưng nằm đúng trọng tâm chiến lược và có trend tích cực; ưu tiên kiểm chứng thay vì hạ xuống P4.'};
+    }
+    // P2-C: SAVA đã chứng minh năng lực rất mạnh ở mechanic này thì có thể nâng một bậc để kiểm chứng tiếp.
+    if(score!==null&&score>=60&&strategic!==null&&strategic>=85&&execution!==null&&execution>=85&&(positiveTrend||strongTrend||partialPositive)){
+      return {key:'test',label:'P2 · Ưu tiên kiểm chứng',desc:'Market chưa đủ mạnh cho P1 nhưng SAVA vừa đúng trọng tâm vừa có năng lực thực thi đã chứng minh; nên ưu tiên kiểm chứng opportunity tốt.'};
+    }
+    // P2-D: case như Tycoon — một growth metric còn thiếu nhưng tín hiệu hiện có mạnh, economics tốt và đúng trọng tâm.
+    if(score!==null&&score>=60&&strategic!==null&&strategic>=85&&partialStrong&&economicsGood){
+      return {key:'test',label:'P2 · Ưu tiên kiểm chứng',desc:'Một chỉ số Growth 3M còn thiếu, nhưng tín hiệu tăng trưởng hiện có mạnh, economics tốt và market đúng trọng tâm. Ưu tiên test để hoàn thiện bằng chứng trước khi nâng P1.'};
     }
 
-    // 4) Tín hiệu tăng trưởng tích cực nhưng score chưa đủ 70 vẫn đáng theo dõi thay vì loại thẳng.
-    if(score!==null&&score>=45&&(positiveTrend||splitTrend)){
-      return {key:'watch',label:'P4 · Theo dõi thêm',desc:'Xu hướng có tín hiệu tích cực nhưng sức hấp dẫn tổng thể chưa đủ để ưu tiên test; tiếp tục cập nhật quy mô, monetization, CPI và SAVA Fit.'};
+    if(score!==null&&score>=45&&(positiveTrend||partialPositive||splitTrend)){
+      return {key:'watch',label:'P4 · Theo dõi thêm',desc:'Có tín hiệu tích cực nhưng sức hấp dẫn/evidence chưa đủ để ưu tiên kiểm chứng; tiếp tục cập nhật dữ liệu.'};
     }
-
     if(score!==null&&score>=55){
       return {key:'watch',label:'P4 · Theo dõi thêm',desc:'Có cơ hội nhưng tín hiệu chưa đủ mạnh hoặc chưa đồng thuận để ưu tiên ngay.'};
     }
@@ -633,24 +667,26 @@
       const growth=(dlMomentum!==null&&revMomentum!==null)?(dlMomentum+revMomentum)/2:null;
       const monetization=marketPctRank(rpd,rpdVals);
       const ua=marketPctRank(cpi,cpiVals,{inverse:true});
-      const savaFitInfo=mechanicSavaFit(m.Mechanic);
-      const savaFit=savaFitInfo.score;
-      const parts=[['scale',scale,30],['growth',growth,25],['monetization',monetization,20],['ua',ua,15],['savaFit',savaFit,10]].filter(([,v])=>v!==null);
+      const strategicFitInfo=mechanicStrategicFit(m),strategicFit=strategicFitInfo.score;
+      const executionFitInfo=mechanicExecutionFit(m.Mechanic),executionFit=executionFitInfo.score;
+      // Market Attractiveness is MARKET-ONLY. Internal SAVA fit does not change whether the market itself is attractive.
+      // Missing market metrics are excluded and the remaining market weights are re-normalized.
+      const parts=[['scale',scale,30],['growth',growth,25],['monetization',monetization,20],['ua',ua,15]].filter(([,v])=>v!==null);
       const observed=[dl,rev,dlg,revg,rpd,cpi].filter(x=>x!==null).length,completeness=observed/6,trend=marketTrendLabel(dlg,revg,scale);
       const weight=parts.reduce((a,x)=>a+x[2],0);const score=weight&&observed>=2?Math.round(parts.reduce((a,x)=>a+x[1]*x[2],0)/weight*10)/10:null;
-      const out={m,dl,rev,dlg,revg,rpd,cpi,scale,growth,monetization,ua,savaFit,savaFitInfo,score,completeness,trend};out.direction=marketDirection(out);return out;
+      const out={m,dl,rev,dlg,revg,rpd,cpi,scale,growth,monetization,ua,strategicFit,strategicFitInfo,executionFit,executionFitInfo,score,completeness,trend};out.direction=marketDirection(out);return out;
     });
   }
   function marketScoreBar(value){const n=num(value),w=n===null?0:Math.max(0,Math.min(100,n));const cls=n===null?'na':n>=80?'priority':n>=70?'pass':n>=55?'conditional':'review';return `<div class="market-score ${cls}" title="${n===null?'Chưa đủ dữ liệu':`${fmt(n,1)}/100`}"><strong>${n===null?'—':fmt(n,1)}</strong><span><i style="width:${w}%"></i></span></div>`;}
   function marketDirectionBadge(x){return `<span class="market-direction ${x.direction.key}" title="${esc(x.direction.desc||'')}">${esc(x.direction.label)}</span>`;}
   function marketDirectionRulesHtml(){
     return `<div class="market-priority-rules">
-      <div class="market-priority-rule-head"><div><span class="eyebrow-mini">QUY TẮC ĐỊNH HƯỚNG</span><h3>P1 → P5 = mức độ ưu tiên giảm dần</h3></div><p>Định hướng là hành động đề xuất cho SAVA, không phải chỉ là xếp hạng market. <b>Bổ sung dữ liệu</b> nằm ngoài P1–P5.</p></div>
+      <div class="market-priority-rule-head"><div><span class="eyebrow-mini">QUY TẮC ĐỊNH HƯỚNG</span><h3>P1 → P5 = mức độ ưu tiên giảm dần</h3></div><p><b>Sức hấp dẫn</b> là market-only. <b>Phù hợp chiến lược</b> lấy từ Sourcing. <b>Năng lực thực thi</b> lấy từ Game Selection. Ba lớp dữ liệu được dùng chung nhưng không trộn thành một điểm.</p></div>
       <div class="market-priority-rule-grid">
-        <div class="market-priority-rule p1"><b>P1 · Ưu tiên chủ động</b><span>Sức hấp dẫn ≥75 + Xu hướng <strong>Bứt phá/Tăng trưởng tốt</strong> + SAVA Fit ≥70.</span><small>Chủ động tìm game/đối tác và đẩy nhanh opportunity phù hợp vào đánh giá/kiểm thử.</small></div>
-        <div class="market-priority-rule p2"><b>P2 · Ưu tiên kiểm chứng</b><span>Sức hấp dẫn ≥70 + tín hiệu tích cực; chưa đủ điều kiện P1. SAVA Fit có thể chưa có, hoặc đã có nhưng chưa đủ cao.</span><small>Nếu có game phù hợp thì ưu tiên test để xác minh trước khi mở rộng sourcing.</small></div>
+        <div class="market-priority-rule p1"><b>P1 · Ưu tiên chủ động</b><span>Sức hấp dẫn ≥75 + Xu hướng <strong>Bứt phá/Tăng trưởng tốt</strong> + Phù hợp chiến lược ≥70.</span><small>Chủ động tìm game/đối tác và fast-track opportunity phù hợp vào đánh giá/kiểm thử.</small></div>
+        <div class="market-priority-rule p2"><b>P2 · Ưu tiên kiểm chứng</b><span>Market ≥70 + trend tích cực; <b>hoặc</b> Market ≥65 + Fit chiến lược ≥85 + trend tích cực; <b>hoặc</b> Market ≥60 + Fit chiến lược cao + bằng chứng/economics đủ mạnh.</span><small>Dùng test thực tế để hoàn thiện Product/Marketing Fit trước khi nâng P1. Case thiếu một Growth metric vẫn có thể P2 nếu tín hiệu còn lại rất mạnh và economics tốt.</small></div>
         <div class="market-priority-rule p3"><b>P3 · Theo dõi chọn lọc</b><span>Xu hướng suy giảm nhưng Khả năng kiếm tiền ≥60/100.</span><small>Không tìm đại trà; chỉ xem xét opportunity có chất lượng/lợi thế rõ.</small></div>
-        <div class="market-priority-rule p4"><b>P4 · Theo dõi thêm</b><span>Market có tín hiệu nhưng chưa đủ mạnh/đồng thuận để ưu tiên kiểm chứng.</span><small>Tiếp tục cập nhật quy mô, trend, monetization, CPI và SAVA Fit.</small></div>
+        <div class="market-priority-rule p4"><b>P4 · Theo dõi thêm</b><span>Market có tín hiệu nhưng chưa đủ mạnh/evidence chưa đủ để ưu tiên kiểm chứng.</span><small>Tiếp tục cập nhật market data và bằng chứng thực thi.</small></div>
         <div class="market-priority-rule p5"><b>P5 · Chưa ưu tiên</b><span>Tín hiệu tổng thể yếu, hoặc market suy giảm và khả năng kiếm tiền thấp.</span><small>Chưa nên dành nhiều nguồn lực ở thời điểm hiện tại.</small></div>
       </div>
     </div>`;
@@ -693,16 +729,16 @@
     const strongGrowth=insights.filter(x=>['breakout','growth-good','low-base'].includes(x.trend.key)).length;
     const strongMon=insights.filter(x=>x.monetization!==null&&x.monetization>=75).length;
     const uaReady=insights.filter(x=>x.ua!==null&&x.ua>=65).length;
-    const execRows=ranked.map(x=>{const m=x.m;const scaleLabel=marketBandLabel(x.scale,'scale'),monLabel=marketBandLabel(x.monetization,'mon'),uaLabel=marketBandLabel(x.ua,'ua');const scaleDetail=`DL ${marketNumCompact(x.dl)} · Rev ${marketMoneyCompact(x.rev)}`;const growthDetail=[x.dlg!==null?`DL ${pct(x.dlg,1)}`:null,x.revg!==null?`Rev ${pct(x.revg,1)}`:null].filter(Boolean).join(' · ')||'—';return `<tr><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button><div class="small muted">${esc(m.Geography||'—')} · ${esc(m.Platform||'—')}</div></td><td>${marketScoreBar(x.score)}</td><td><b>${esc(scaleLabel)}</b><div class="small muted">${esc(scaleDetail)}</div></td><td><span class="market-trend ${x.trend.key}" title="${esc(x.trend.detail||'')}">${esc(x.trend.label)}</span><div class="small muted">${esc(growthDetail)}</div></td><td><b>${esc(monLabel)}</b><div class="small muted">RPD ${x.rpd===null?'—':'$'+fmt(x.rpd,2)}</div></td><td><b>${x.cpi===null?'—':'$'+fmt(x.cpi,2)}</b><div class="small muted">${esc(uaLabel)}</div></td><td>${x.savaFit===null?'<span class="muted">Chưa đủ dữ liệu</span>':marketScoreBar(x.savaFit)+`<div class="small linked-source">${x.savaFitInfo?.count||0} Game/Candidate</div>`}</td><td>${marketDirectionBadge(x)}</td></tr>`;});
+    const execRows=ranked.map(x=>{const m=x.m;const scaleLabel=marketBandLabel(x.scale,'scale'),monLabel=marketBandLabel(x.monetization,'mon'),uaLabel=marketBandLabel(x.ua,'ua');const scaleDetail=`DL ${marketNumCompact(x.dl)} · Rev ${marketMoneyCompact(x.rev)}`;const growthDetail=[x.dlg!==null?`DL ${pct(x.dlg,1)}`:null,x.revg!==null?`Rev ${pct(x.revg,1)}`:null].filter(Boolean).join(' · ')||'—';return `<tr><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button><div class="small muted">${esc(m.Geography||'—')} · ${esc(m.Platform||'—')}</div></td><td>${marketScoreBar(x.score)}</td><td><b>${esc(scaleLabel)}</b><div class="small muted">${esc(scaleDetail)}</div></td><td><span class="market-trend ${x.trend.key}" title="${esc(x.trend.detail||'')}">${esc(x.trend.label)}</span><div class="small muted">${esc(growthDetail)}</div></td><td><b>${esc(monLabel)}</b><div class="small muted">RPD ${x.rpd===null?'—':'$'+fmt(x.rpd,2)}</div></td><td><b>${x.cpi===null?'—':'$'+fmt(x.cpi,2)}</b><div class="small muted">${esc(uaLabel)}</div></td><td>${x.strategicFit===null?'<span class="muted">N/A</span>':marketScoreBar(x.strategicFit)+`<div class="small linked-source">${esc(x.strategicFitInfo?.group||'')}</div>`}</td><td>${x.executionFit===null?'<span class="muted">Chưa có evidence</span>':marketScoreBar(x.executionFit)+`<div class="small linked-source">${x.executionFitInfo?.count||0} Game/Candidate</div>`}</td><td>${marketDirectionBadge(x)}</td></tr>`;});
     const rawRows=mechanics.map(m=>`<tr><td>${esc(m.Mechanic_ID)}</td><td><button class="linkish" data-open-market="${esc(m.Mechanic_ID)}">${esc(m.Mechanic)}</button></td><td>${esc(m.Geography||'—')}</td><td>${fmt(m.Downloads_30d,0)}</td><td>${money(m.Revenue_30d_USD)}</td><td>${m.DL_Growth_3m!==null&&m.DL_Growth_3m!==undefined?pct(m.DL_Growth_3m,1):'—'}</td><td>${m.Rev_Growth_3m!==null&&m.Rev_Growth_3m!==undefined?pct(m.Rev_Growth_3m,1):'—'}</td><td>${m.Revenue_per_Download_SAME_COHORT!==null&&m.Revenue_per_Download_SAME_COHORT!==undefined?'$'+fmt(m.Revenue_per_Download_SAME_COHORT,2):'—'}</td><td>${m.UA_Benchmark?.CPI_Median!==null&&m.UA_Benchmark?.CPI_Median!==undefined?'$'+fmt(m.UA_Benchmark.CPI_Median,2):'—'}</td></tr>`);
     const pubs=(db.publisherLandscape||[]).filter(x=>includesSearch(x.name,x.genres,x.testApproach,x.dealApproach)).map(x=>`<tr><td><button class="linkish" data-open-publisher="${x.id}">${esc(x.name)}</button></td><td>${esc(x.genres||'—')}</td><td>${esc(x.lookingFor||'—')}</td><td>${esc(x.testApproach||'—')}</td><td>${esc(x.investmentApproach||'—')}</td><td>${esc(x.dealApproach||'—')}</td><td>${esc(x.operationModel||'—')}</td></tr>`);
     const top=ranked.find(x=>x.score!==null),topGrowth=[...insights].filter(x=>x.growth!==null).sort((a,b)=>(b.growth??-1)-(a.growth??-1))[0];
     const executiveNote=`<div class="market-exec-note"><b>Đọc nhanh cho quyết định:</b> ${top?`Cơ hội tổng hợp cao nhất hiện tại là <strong>${esc(top.m.Mechanic)}</strong> (${fmt(top.score,1)}/100).`: 'Chưa đủ dữ liệu để xếp hạng.'} ${topGrowth?`Đà tăng trưởng tương đối nổi bật: <strong>${esc(topGrowth.m.Mechanic)}</strong> (${fmt(topGrowth.growth,0)}/100 · ${esc(topGrowth.trend.label)}).`:''}<span><b>Đà tăng trưởng /100</b> = xếp hạng tương đối của DL Growth 3M và Revenue Growth 3M theo tỷ trọng 50/50. <b>Khả năng kiếm tiền /100</b> = xếp hạng RPD so với các mechanic khác. 100 = thuộc nhóm tốt nhất trong tập dữ liệu, không phải % tăng trưởng thực tế.</span></div>`;
-    const formula=`<div class="market-formula"><span><b>30%</b> Quy mô</span><span><b>25%</b> Đà tăng trưởng</span><span><b>20%</b> Khả năng kiếm tiền</span><span><b>15%</b> UA</span><span><b>10%</b> Phù hợp SAVA</span><small><b>Đà tăng trưởng /100:</b> 50% xếp hạng DL Growth 3M + 50% xếp hạng Revenue Growth 3M. <b>Khả năng kiếm tiền /100:</b> percentile RPD trong tập mechanic. Nếu thiếu một trong hai Growth metric, phần Đà tăng trưởng được coi là chưa đủ dữ liệu và trọng số sẽ tự phân bổ lại.</small></div>`;
-    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('P1 · Ưu tiên chủ động',priority,'Mức ưu tiên cao nhất: market tốt + trend khỏe + SAVA Fit đã xác nhận')}${kpi('Tăng trưởng đồng thuận',strongGrowth,'DL & Revenue 3M cùng tăng ≥ 10%')}${kpi('Khả năng kiếm tiền nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
+    const formula=`<div class="market-formula"><span><b>30%</b> Quy mô</span><span><b>25%</b> Đà tăng trưởng</span><span><b>20%</b> Khả năng kiếm tiền</span><span><b>15%</b> UA</span><small><b>Sức hấp dẫn /100 là market-only:</b> 4 nhóm trên được tự chuẩn hóa theo tổng trọng số 90; không cộng Fit nội bộ SAVA. <b>Đà tăng trưởng /100:</b> 50% xếp hạng DL Growth 3M + 50% xếp hạng Revenue Growth 3M. Nếu thiếu một Growth metric, phần Growth không đi vào Market Score; rule Định hướng vẫn có thể dùng tín hiệu còn lại như evidence chưa hoàn chỉnh.</small></div>`;
+    content.innerHTML=`<div class="grid kpis market-kpis">${kpi('P1 · Ưu tiên chủ động',priority,'Mức ưu tiên cao nhất: market tốt + trend khỏe + đúng hướng chiến lược SAVA')}${kpi('Tăng trưởng đồng thuận',strongGrowth,'DL & Revenue 3M cùng tăng ≥ 10%')}${kpi('Khả năng kiếm tiền nổi bật',strongMon,'Top quartile theo RPD')}${kpi('UA thuận lợi',uaReady,'CPI tương đối thuận lợi trong tập dữ liệu')}</div>
       ${executiveNote}
       <div class="market-chart-grid"><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">XẾP HẠNG</span><h3>Top Sức hấp dẫn thị trường /100</h3></div></div>${marketTopBars(insights)}</section><section class="market-chart-card"><div class="market-chart-head"><div><span class="eyebrow-mini">BẢN ĐỒ CƠ HỘI</span><h3>Đà tăng trưởng × Khả năng kiếm tiền</h3></div><small>Kích thước điểm ≈ quy mô tương đối · 100 = nhóm tốt nhất trong dataset</small></div>${marketScatter(insights)}<div class="market-chart-guide"><span><b>Trên phải:</b> tăng nhanh + kiếm tiền tốt</span><span><b>Trên trái:</b> kiếm tiền tốt, tăng chậm</span><span><b>Dưới phải:</b> tăng nhanh, kiếm tiền yếu</span><span><b>Dưới trái:</b> ưu tiên thấp</span></div></section></div>
-      ${panel('Định hướng thị trường',formula+table(['Thị trường / Mechanic','Sức hấp dẫn /100','Quy mô','Xu hướng 3M','Khả năng kiếm tiền','CPI','Phù hợp SAVA /100','Định hướng'],execRows,'market-exec-table'),'Bảng dành cho quyết định: click mechanic để xem dữ liệu chi tiết. Phù hợp SAVA /100 được tự động tổng hợp từ Game Selection.')}
+      ${panel('Định hướng thị trường',formula+table(['Thị trường / Mechanic','Sức hấp dẫn /100','Quy mô','Xu hướng 3M','Khả năng kiếm tiền','CPI','Phù hợp chiến lược /100','Năng lực thực thi /100','Định hướng'],execRows,'market-exec-table'),'Bảng dành cho quyết định: Market Score chỉ phản ánh thị trường; Phù hợp chiến lược lấy từ Sourcing; Năng lực thực thi lấy từ Game Selection.')}
       ${panel('Bản đồ cơ hội SAVA',marketDirectionRulesHtml()+marketOpportunityMap(insights),'P1 → P5 được sắp từ mức độ ưu tiên cao xuống thấp. Rule hiển thị ngay trên bản đồ để người xem hiểu vì sao mechanic được xếp vào từng nhóm.')}
       ${panel('Publisher Landscape',pubs.length?table(['Publisher','Thể loại trọng tâm','Đang tìm gì','Cách test','Cách đầu tư','Cách deal','Cách vận hành'],pubs):'<div class="empty"><b>Chưa có dữ liệu Publisher Landscape riêng trong các file nguồn hiện tại.</b><br/>Team có thể bổ sung benchmark tại đây mà không trộn giả định vào dữ liệu thị trường gốc.</div>','Theo dõi publisher đang tìm game gì, cách họ test, đầu tư, deal và vận hành.',`<button class="primary" data-action="add-publisher">+ Publisher benchmark</button>`)}
       ${panel('Dữ liệu chi tiết',`<details class="market-raw-details"><summary>Xem bảng Market Economics + UA Benchmark (${mechanics.length} mechanics)</summary>${table(['ID','Mechanic','Geo','DL 30D','Revenue 30D','DL Growth 3M','Rev Growth 3M','RPD','CPI Median'],rawRows,'market-raw-table')}</details>`,'Dữ liệu gốc từ Market Economics + UA Benchmark; các tổng lịch sử có thể bị giới hạn coverage đúng như ghi chú trong workbook nguồn.')}`;
@@ -1138,8 +1174,10 @@
     const currentRpd=x?.rpd===null||x?.rpd===undefined?'—':`$${fmt(x.rpd,2)}`;
     const currentDirection=x?.direction?.label||'—';
     const currentScore=x?.score===null||x?.score===undefined?'—':`${fmt(x.score,1)}/100`;
+    const currentStrategic=x?.strategicFit===null||x?.strategicFit===undefined?'N/A':`${fmt(x.strategicFit,0)}/100 · ${x.strategicFitInfo?.level||''}`;
+    const currentExecution=x?.executionFit===null||x?.executionFit===undefined?'Chưa đủ dữ liệu':`${fmt(x.executionFit,1)}/100 · ${x.executionFitInfo?.count||0} Game/Candidate`;
     return `<div class="market-edit-guide">
-      <div class="market-guide-current"><div><span>Xu hướng 3M hiện tại</span><b>${esc(currentTrend)}</b></div><div><span>Khả năng kiếm tiền</span><b>${esc(currentMon)}</b><small>RPD ${esc(currentRpd)}</small></div><div><span>Sức hấp dẫn</span><b>${esc(currentScore)}</b></div><div><span>Định hướng hiện tại</span><b>${esc(currentDirection)}</b></div></div>
+      <div class="market-guide-current"><div><span>Xu hướng 3M hiện tại</span><b>${esc(currentTrend)}</b></div><div><span>Khả năng kiếm tiền</span><b>${esc(currentMon)}</b><small>RPD ${esc(currentRpd)}</small></div><div><span>Sức hấp dẫn thị trường</span><b>${esc(currentScore)}</b></div><div><span>Phù hợp chiến lược</span><b>${esc(currentStrategic)}</b></div><div><span>Năng lực thực thi</span><b>${esc(currentExecution)}</b></div><div><span>Định hướng hiện tại</span><b>${esc(currentDirection)}</b></div></div>
       <details open><summary>Rule 1 · Xu hướng 3M được xác định như thế nào?</summary><div class="market-rule-body"><p>Xu hướng 3M <b>không lấy trung bình cộng</b> DL Growth và Revenue Growth. Hệ thống đọc hai tín hiệu song song để phân biệt tăng user, tăng doanh thu và các trường hợp trái chiều.</p><table class="market-rule-table"><thead><tr><th>DL Growth 3M</th><th>Revenue Growth 3M</th><th>Nhãn</th><th>Cách hiểu</th></tr></thead><tbody>
         <tr><td>≥ +50%</td><td>≥ +50%</td><td><b>Bứt phá</b></td><td>User và doanh thu cùng tăng rất mạnh.</td></tr>
         <tr><td>≥ +50%</td><td>≥ +50%</td><td><b>Tăng mạnh từ nền thấp</b></td><td>Cùng tăng mạnh nhưng quy mô hiện tại thuộc nhóm thấp; cần tránh hiệu ứng low-base.</td></tr>
@@ -1153,24 +1191,30 @@
         <tr><td>-10% → +10%</td><td>&lt; -10%</td><td><b>Doanh thu suy giảm</b></td><td>User giữ được nhưng doanh thu giảm.</td></tr>
         <tr><td>≤ -10%</td><td>≤ -10%</td><td><b>Suy giảm</b></td><td>Cả user và doanh thu cùng đi xuống.</td></tr>
         <tr><td>≤ -30%</td><td>≤ -30%</td><td><b>Suy giảm mạnh</b></td><td>Market co lại rõ ở cả hai chiều.</td></tr>
-      </tbody></table><p class="small muted"><b>Lưu ý:</b> cần có cả DL Growth 3M và Revenue Growth 3M. Nếu thiếu một trong hai, nhãn là “Chưa đủ dữ liệu”.</p></div></details>
-      <details open><summary>Rule 2 · Khả năng kiếm tiền /100 được tính như thế nào?</summary><div class="market-rule-body"><p>Hệ thống dùng <b>RPD (Revenue per Download)</b> của mechanic và xếp hạng tương đối so với các mechanic khác trong tập dữ liệu hiện tại. Đây là <b>điểm percentile 0–100</b>, không phải số USD và không phải % tăng trưởng.</p><div class="market-rule-bands"><span><b>≥80</b> Rất tốt</span><span><b>60–79.9</b> Tốt</span><span><b>40–59.9</b> Trung bình</span><span><b>&lt;40</b> Thấp</span></div><p class="small muted">Ví dụ: 80/100 nghĩa là RPD của mechanic nằm trong nhóm cao của dataset. RPD bằng 0 hoặc không có dữ liệu không được xem là tín hiệu monetization hợp lệ để xếp hạng.</p></div></details>
-      <details open><summary>Rule 3 · Định hướng cho SAVA được quyết định như thế nào?</summary><div class="market-rule-body"><p><b>Thứ tự ưu tiên: P1 → P2 → P3 → P4 → P5.</b> P1 là trọng yếu nhất. Trạng thái “Bổ sung dữ liệu” nằm ngoài xếp hạng vì chưa đủ evidence để ra quyết định.</p><table class="market-rule-table"><thead><tr><th>Điều kiện chính</th><th>Định hướng</th><th>Ý nghĩa hành động</th></tr></thead><tbody>
-        <tr><td>Dữ liệu thị trường quá thiếu</td><td><b>Bổ sung dữ liệu</b></td><td>Chưa kết luận; cần hoàn thiện benchmark.</td></tr>
-        <tr><td>Sức hấp dẫn ≥75 + SAVA Fit ≥70 + Bứt phá/Tăng trưởng tốt</td><td><b>P1 · Ưu tiên chủ động</b></td><td>Mức cao nhất: chủ động tìm game/đối tác và fast-track opportunity phù hợp vào đánh giá/kiểm thử.</td></tr>
-        <tr><td>Sức hấp dẫn ≥70 + tín hiệu tích cực; chưa đủ điều kiện P1; SAVA Fit chưa có hoặc ≥55</td><td><b>P2 · Ưu tiên kiểm chứng</b></td><td>Ưu tiên test game phù hợp để xác minh Product/Marketing Fit và SAVA Fit trước khi mở rộng sourcing.</td></tr>
-        <tr><td>Xu hướng suy giảm + Khả năng kiếm tiền ≥60/100</td><td><b>P3 · Theo dõi chọn lọc</b></td><td>Market có thể trưởng thành/niche nhưng vẫn monetize tốt; chỉ xem xét game/partner chất lượng cao, không tìm kiếm đại trà.</td></tr>
-        <tr><td>Sức hấp dẫn 45–69.9 + tín hiệu tích cực, hoặc Sức hấp dẫn ≥55 nhưng tín hiệu chưa đủ đồng thuận</td><td><b>P4 · Theo dõi thêm</b></td><td>Có cơ hội nhưng chưa đủ để ưu tiên kiểm chứng; tiếp tục cập nhật dữ liệu.</td></tr>
-        <tr><td>Xu hướng suy giảm + kiếm tiền yếu, hoặc sức hấp dẫn thấp và không có tín hiệu tăng trưởng đáng kể</td><td><b>P5 · Chưa ưu tiên</b></td><td>Chưa nên dành nhiều nguồn lực.</td></tr>
-      </tbody></table><p class="small muted"><b>Sức hấp dẫn /100</b> hiện dùng: Quy mô 30% · Đà tăng trưởng 25% · Khả năng kiếm tiền 20% · UA 15% · Phù hợp SAVA 10%. <b>Phù hợp SAVA /100 được tự động lấy từ Game Selection</b>: trung bình SAVA Publishing Fit của các Game/Candidate cùng mechanic. Metric thiếu được bỏ khỏi mẫu số và trọng số còn lại tự chuẩn hóa.</p></div></details>
+      </tbody></table><p class="small muted"><b>Nếu thiếu một Growth metric:</b> nhãn Xu hướng = “Chưa đủ dữ liệu”. Tuy nhiên Định hướng có thể vẫn xếp P2 để <b>kiểm chứng</b> nếu tín hiệu Growth còn lại ≥50%, Fit chiến lược ≥85, khả năng kiếm tiền và UA đều ≥60/100. Đây là case validation, không phải kết luận trend đầy đủ.</p></div></details>
+      <details open><summary>Rule 2 · Khả năng kiếm tiền /100 được tính như thế nào?</summary><div class="market-rule-body"><p>Hệ thống dùng <b>RPD (Revenue per Download)</b> và xếp hạng tương đối so với các mechanic khác trong tập dữ liệu hiện tại. Đây là điểm percentile 0–100, không phải số USD và không phải % tăng trưởng.</p><div class="market-rule-bands"><span><b>≥80</b> Rất tốt</span><span><b>60–79.9</b> Tốt</span><span><b>40–59.9</b> Trung bình</span><span><b>&lt;40</b> Thấp</span></div></div></details>
+      <details open><summary>Rule 3 · Hai loại “Fit SAVA” khác nhau ở đâu?</summary><div class="market-rule-body"><table class="market-rule-table"><thead><tr><th>Chỉ số</th><th>Nguồn sở hữu</th><th>Ý nghĩa</th><th>Cách tính</th></tr></thead><tbody>
+        <tr><td><b>Phù hợp chiến lược /100</b></td><td>Sourcing · 07_Market_Intel_Ref</td><td>Mechanic/genre có nằm trong hướng SAVA muốn tập trung hay không.</td><td>Đúng trọng tâm = 100 · Liền kề = 60 · Ngoài trọng tâm = 20. Mapping tự động từ taxonomy mechanic.</td></tr>
+        <tr><td><b>Năng lực thực thi /100</b></td><td>Game Selection</td><td>SAVA đã có evidence thực tế để publish dòng này tốt đến đâu.</td><td>Trung bình SAVA Publishing Fit của Game/Candidate cùng mechanic. Thiếu evidence = để trống, không quy thành 0.</td></tr>
+      </tbody></table><p class="small muted">Hai điểm này <b>không cộng vào Sức hấp dẫn thị trường</b>. Chúng chỉ giúp quyết định SAVA nên hành động thế nào trên một market đã được đánh giá độc lập.</p></div></details>
+      <details open><summary>Rule 4 · Định hướng P1 → P5 được quyết định như thế nào?</summary><div class="market-rule-body"><p><b>P1 → P5 là mức độ ưu tiên giảm dần.</b> “Bổ sung dữ liệu” nằm ngoài P1–P5.</p><table class="market-rule-table"><thead><tr><th>Điều kiện chính</th><th>Định hướng</th><th>Ý nghĩa</th></tr></thead><tbody>
+        <tr><td>Market ≥75 + Bứt phá/Tăng trưởng tốt + Fit chiến lược ≥70</td><td><b>P1 · Ưu tiên chủ động</b></td><td>Chủ động tìm game/đối tác và fast-track opportunity phù hợp.</td></tr>
+        <tr><td>Market ≥70 + trend tích cực + không ngoài trọng tâm</td><td><b>P2 · Ưu tiên kiểm chứng</b></td><td>Market đủ tốt để ưu tiên test nhưng chưa đủ P1.</td></tr>
+        <tr><td>Market ≥65 + Fit chiến lược ≥85 + trend tích cực</td><td><b>P2 · Ưu tiên kiểm chứng</b></td><td>Tránh cliff effect 69.x/70 khi market đúng hướng SAVA.</td></tr>
+        <tr><td>Market ≥60 + Fit chiến lược ≥85 + Năng lực thực thi ≥85 + tín hiệu tích cực</td><td><b>P2 · Ưu tiên kiểm chứng</b></td><td>Dùng lợi thế thực thi đã chứng minh để ưu tiên kiểm chứng tiếp.</td></tr>
+        <tr><td>Market ≥60 + Fit chiến lược ≥85 + 1 Growth ≥50% (metric còn lại thiếu) + Monetization & UA ≥60</td><td><b>P2 · Ưu tiên kiểm chứng</b></td><td>Case như Tycoon: evidence chưa đủ để kết luận trend, nhưng đáng dành slot test để hoàn thiện bằng chứng.</td></tr>
+        <tr><td>Xu hướng suy giảm + Khả năng kiếm tiền ≥60</td><td><b>P3 · Theo dõi chọn lọc</b></td><td>Chỉ xem opportunity chất lượng cao, không tìm đại trà.</td></tr>
+        <tr><td>Có tín hiệu nhưng chưa đủ P1–P3</td><td><b>P4 · Theo dõi thêm</b></td><td>Tiếp tục cập nhật dữ liệu/evidence.</td></tr>
+        <tr><td>Tín hiệu tổng thể yếu</td><td><b>P5 · Chưa ưu tiên</b></td><td>Chưa nên dành nhiều nguồn lực.</td></tr>
+      </tbody></table><p class="small muted"><b>Sức hấp dẫn /100 là market-only:</b> Quy mô 30 · Đà tăng trưởng 25 · Khả năng kiếm tiền 20 · UA 15; tổng trọng số 90 và tự chuẩn hóa khi metric thiếu. Không cộng Fit SAVA vào Market Score.</p></div></details>
     </div>`;
   }
 
   function openMarket(id){
     const m=(db.market||[]).find(x=>x.Mechanic_ID===id);if(!m)return;
     const currentInsight=marketAnalytics(db.market||[]).find(x=>x.m.Mechanic_ID===id);
-    const fitInfo=mechanicSavaFit(m.Mechanic);
-    const body=`<div class="notice"><b>Hướng dẫn BD:</b> nhập/cập nhật dữ liệu benchmark thị trường. Xu hướng 3M, Khả năng kiếm tiền /100, Phù hợp SAVA /100 và Định hướng đều được hệ thống tự tính. <b>Phù hợp SAVA lấy trực tiếp từ Game Selection</b>, không nhập lại ở đây.</div>${marketEditGuideHtml(currentInsight)}<div class="section-title">Dữ liệu dùng chung từ Game Selection</div>${mechanicSavaFitHtml(fitInfo)}<div class="section-title">Dữ liệu thị trường</div><div class="form-grid three-cols">${fText('name','Mechanic',m.Mechanic)}${fText('geo','Geography',m.Geography)}${fText('platform','Platform',m.Platform)}${fText('dl30','Downloads 30d',m.Downloads_30d??'','','number')}${fText('dl90','Downloads 90d',m.Downloads_90d??'','','number')}${fText('dl12','Downloads 12m',m.Downloads_12m??'','','number')}${fText('rev30','Revenue 30d USD',m.Revenue_30d_USD??'','','number')}${fText('rev90','Revenue 90d USD',m.Revenue_90d_USD??'','','number')}${fText('rev12','Revenue 12m USD',m.Revenue_12m_USD??'','','number')}${fText('dlg3','Tăng trưởng DL 3M (decimal)',m.DL_Growth_3m??'','','number')}${fText('revg3','Tăng trưởng Revenue 3M (decimal)',m.Rev_Growth_3m??'','','number')}${fText('rpd','RPD (Revenue / Download)',m.Revenue_per_Download_SAME_COHORT??'','','number')}${fText('cpi','CPI median',m.UA_Benchmark?.CPI_Median??'','','number')}</div><div class="section-title">Ghi chú định hướng</div><div class="form-grid">${fArea('savaNote','Ghi chú / bối cảnh bổ sung',m.SAVA_Direction_Note||'')}</div>`;
+    const strategicInfo=mechanicStrategicFit(m),executionInfo=mechanicExecutionFit(m.Mechanic);
+    const body=`<div class="notice"><b>Hướng dẫn BD:</b> chỉ nhập/cập nhật benchmark thị trường và ghi chú. <b>Sức hấp dẫn, Xu hướng 3M, Khả năng kiếm tiền, Phù hợp chiến lược, Năng lực thực thi và Định hướng đều tự tính/tự lấy từ module sở hữu.</b></div>${marketEditGuideHtml(currentInsight)}<div class="section-title">Dữ liệu dùng chung từ Sourcing</div>${mechanicStrategicFitHtml(strategicInfo)}<div class="section-title">Dữ liệu dùng chung từ Game Selection</div>${mechanicExecutionFitHtml(executionInfo)}<div class="section-title">Dữ liệu thị trường</div><div class="form-grid three-cols">${fText('name','Mechanic',m.Mechanic)}${fText('geo','Geography',m.Geography)}${fText('platform','Platform',m.Platform)}${fText('dl30','Downloads 30d',m.Downloads_30d??'','','number')}${fText('dl90','Downloads 90d',m.Downloads_90d??'','','number')}${fText('dl12','Downloads 12m',m.Downloads_12m??'','','number')}${fText('rev30','Revenue 30d USD',m.Revenue_30d_USD??'','','number')}${fText('rev90','Revenue 90d USD',m.Revenue_90d_USD??'','','number')}${fText('rev12','Revenue 12m USD',m.Revenue_12m_USD??'','','number')}${fText('dlg3','Tăng trưởng DL 3M (decimal)',m.DL_Growth_3m??'','','number')}${fText('revg3','Tăng trưởng Revenue 3M (decimal)',m.Rev_Growth_3m??'','','number')}${fText('rpd','RPD (Revenue / Download)',m.Revenue_per_Download_SAME_COHORT??'','','number')}${fText('cpi','CPI median',m.UA_Benchmark?.CPI_Median??'','','number')}</div><div class="section-title">Ghi chú định hướng</div><div class="form-grid">${fArea('savaNote','Ghi chú / bối cảnh bổ sung',m.SAVA_Direction_Note||'')}</div>`;
     modal(`${id} · ${m.Mechanic}`,body,(root)=>{m.Mechanic=formVal(root,'name');m.Geography=formVal(root,'geo');m.Platform=formVal(root,'platform');m.Downloads_30d=formNum(root,'dl30');m.Downloads_90d=formNum(root,'dl90');m.Downloads_12m=formNum(root,'dl12');m.Revenue_30d_USD=formNum(root,'rev30');m.Revenue_90d_USD=formNum(root,'rev90');m.Revenue_12m_USD=formNum(root,'rev12');m.DL_Growth_3m=formNum(root,'dlg3');m.Rev_Growth_3m=formNum(root,'revg3');m.Revenue_per_Download_SAME_COHORT=formNum(root,'rpd');m.UA_Benchmark=m.UA_Benchmark||{};m.UA_Benchmark.CPI_Median=formNum(root,'cpi');m.SAVA_Direction_Note=formVal(root,'savaNote');modalRoot.innerHTML='';persist(`Updated market mechanic ${id}`);},{wide:true});
   }
 

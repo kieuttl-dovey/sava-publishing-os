@@ -1,8 +1,16 @@
-# SAVA Publishing OS v0.5 — Partner Executive View + SAVA Visual System
+# SAVA Publishing OS v0.6 — Compact Partner Executive View
 
 Internal publishing workspace for **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, and Publishing Operation**.
 
 This version uses **Supabase Auth + Postgres** as the shared source of truth. GitHub Pages only hosts the static frontend.
+
+## v0.6 changes
+
+- Compact Partner Master table to reduce horizontal scrolling.
+- Combine Deal model + Partner fee into **Hợp tác** and UA commitment + condition into **UA** while keeping **SAVA / Đối tác** separate.
+- Score bars now use the original Partner Selection workbook thresholds: **≥85 Ưu tiên, ≥75 Đạt, ≥65 Có điều kiện, <65 Cần xem xét**.
+- Partner Fit follows those rules exactly; Production Potential uses the same visual bands for consistent /100 reading because the source workbook does not define a separate Production Potential /100 classification.
+- Added score legend and compact two-line cells/tooltips for long commercial text.
 
 ## v0.5 changes
 

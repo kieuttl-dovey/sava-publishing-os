@@ -97,6 +97,22 @@
     return `<span class="badge ${cls}">${esc(text||'—')}</span>`;
   }
 
+  // Thresholds follow 04_Scorecard in the source Partner Selection workbook:
+  // >=85 Ưu tiên · >=75 Đạt · >=65 Có điều kiện · <65 Cần xem xét.
+  function scoreBand(value){
+    const n=num(value);
+    if(n===null) return {key:'na',label:'Chưa chấm'};
+    if(n>=85) return {key:'priority',label:'Ưu tiên'};
+    if(n>=75) return {key:'pass',label:'Đạt'};
+    if(n>=65) return {key:'conditional',label:'Có điều kiện'};
+    return {key:'review',label:'Cần xem xét'};
+  }
+  function scoreBar(value,{showLabel=false}={}){
+    const n=num(value), band=scoreBand(value);
+    const width=n===null?0:Math.max(0,Math.min(100,n));
+    return `<div class="score-stack score-${band.key}" title="${n===null?'Chưa có điểm':`${fmt(n,1)}/100 · ${band.label}`}"><div class="score-row"><strong>${n===null?'—':fmt(n,1)}</strong><span class="scorebar ${band.key}"><i style="width:${width}%"></i></span></div>${showLabel?`<div class="score-band-label">${esc(band.label)}</div>`:''}</div>`;
+  }
+
   function hardGateResult(p){
     const vals=['legalContract','ipSourceRights','publisherConflict','dataTransparency','teamContinuity','compliance'].map(k=>p.hardGate?.[k]||'Chờ xác minh');
     if(vals.some(x=>x==='Không đạt')) return 'KHÔNG ĐẠT';
@@ -231,7 +247,7 @@
     const gameStats=db.games.map(g=>gameDerived(g));
     const openHigh=(db.partnerRisks||[]).filter(r=>['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score)) && r.status!=='Đã đóng').length;
     const opsActive=(db.projects||[]).filter(p=>!['Đã đóng','Stopped'].includes(p.deploymentStatus)).length;
-    const partnerRows=db.partners.filter(p=>includesSearch(p.id,profile(p,'Tên Partner / Studio'),profile(p,'Genre chính'))).map(p=>{const d=partnerDerived(p);return `<tr><td><button class="linkish" data-open-partner="${p.id}">${p.id}</button></td><td><b>${esc(profile(p,'Tên Partner / Studio'))}</b><div class="small muted">${esc(profile(p,'Genre chính')||'')}</div></td><td>${badge(d.hard)}</td><td><div class="score-row"><strong>${d.fit??'—'}</strong><span class="scorebar"><i style="width:${Math.min(100,d.fit||0)}%"></i></span></div></td><td>${badge(d.final)}</td><td>${esc(p.decision?.nextAction||p.scorecard?.nextAction||'—')}</td></tr>`;});
+    const partnerRows=db.partners.filter(p=>includesSearch(p.id,profile(p,'Tên Partner / Studio'),profile(p,'Genre chính'))).map(p=>{const d=partnerDerived(p);return `<tr><td><button class="linkish" data-open-partner="${p.id}">${p.id}</button></td><td><b>${esc(profile(p,'Tên Partner / Studio'))}</b><div class="small muted">${esc(profile(p,'Genre chính')||'')}</div></td><td>${badge(d.hard)}</td><td>${scoreBar(d.fit)}</td><td>${badge(d.final)}</td><td>${esc(p.decision?.nextAction||p.scorecard?.nextAction||'—')}</td></tr>`;});
     const stageCounts=Object.fromEntries(STAGES.map(s=>[s,(db.sourcing||[]).filter(x=>x.stage===s).length]));
     const funnel=STAGES.map((s,i)=>`<tr><td>${s}</td><td class="num"><b>${stageCounts[s]}</b></td><td class="num">${i===0?'—':stageCounts[STAGES[i-1]]?((stageCounts[s]/stageCounts[STAGES[i-1]])*100).toFixed(0)+'%':'—'}</td></tr>`);
     const alerts=[];
@@ -254,24 +270,26 @@
       const riskText=rs.open.length?`${rs.open.length} đang mở${rs.high.length?` · ${rs.high.length} cao`:''}`:'Không có risk mở';
       const sava=profile(p,'Rev Share SAVA (%)'),partner=profile(p,'Rev Share Partner (%)');
       const shareText=(num(sava)!==null||num(partner)!==null)?`${num(sava)!==null?pct(sava,0):'—'} / ${num(partner)!==null?pct(partner,0):'—'}`:'—';
-      const next=clipText(p.decision?.nextAction||p.scorecard?.nextAction||'—',95);
-      const uaCond=clipText(profile(p,'Điều kiện cam kết UA')||'—',80);
+      const nextFull=p.decision?.nextAction||p.scorecard?.nextAction||'—';
+      const next=clipText(nextFull,72);
+      const uaCommit=profile(p,'Cam kết UA / Marketing Spend')||'—';
+      const uaCondFull=profile(p,'Điều kiện cam kết UA')||'—';
+      const uaCond=clipText(uaCondFull,62);
+      const model=profile(p,'Mô hình hợp tác tài chính')||'—';
+      const fee=profile(p,'Mức cam kết đầu tư cho Partner')||'—';
       const partnerName=profile(p,'Tên Partner / Studio')||p.id;
       return `<tr>
-        <td class="partner-cell"><button class="linkish partner-name" data-open-partner="${p.id}">${esc(partnerName)}</button><div class="small muted">${esc(p.id)} · ${esc(profile(p,'Quốc gia')||'—')} · ${esc(profile(p,'Quy mô team')||'—')}</div></td>
-        <td>${esc(profile(p,'Genre chính')||'—')}</td>
+        <td class="partner-cell"><button class="linkish partner-name" data-open-partner="${p.id}">${esc(partnerName)}</button><div class="small muted">${esc(p.id)} · ${esc(profile(p,'Quốc gia')||'—')} · ${esc(profile(p,'Quy mô team')||'—')}</div><button class="row-delete" data-delete-partner="${p.id}" title="Xóa đối tác">Xóa</button></td>
+        <td class="compact-text">${esc(profile(p,'Genre chính')||'—')}</td>
         <td>${badge(profile(p,'Trạng thái')||'—')}</td>
-        <td><div class="score-stack"><div class="score-row"><strong>${prod.overall===null?'—':fmt(prod.overall,1)}</strong><span class="scorebar"><i style="width:${Math.min(100,prod.overall||0)}%"></i></span></div><div class="small muted">${esc(prod.maturity)}</div></div></td>
-        <td><div class="score-row"><strong>${d.fit===null?'—':fmt(d.fit,1)}</strong><span class="scorebar"><i style="width:${Math.min(100,d.fit||0)}%"></i></span></div></td>
-        <td>${esc(profile(p,'Mô hình hợp tác tài chính')||'—')}</td>
-        <td class="nowrap">${esc(profile(p,'Mức cam kết đầu tư cho Partner')||'—')}</td>
-        <td class="nowrap"><b>${esc(shareText)}</b></td>
-        <td class="nowrap">${esc(profile(p,'Cam kết UA / Marketing Spend')||'—')}</td>
-        <td class="cell-long" title="${esc(profile(p,'Điều kiện cam kết UA')||'')}">${esc(uaCond)}</td>
+        <td>${scoreBar(prod.overall,{showLabel:true})}<div class="small muted maturity">${esc(prod.maturity)}</div></td>
+        <td>${scoreBar(d.fit,{showLabel:true})}</td>
+        <td class="commercial-cell" title="${esc(`${model} · ${fee}`)}"><b>${esc(model)}</b><div class="small muted ellipsis-2">${esc(fee)}</div></td>
+        <td class="nowrap share-cell"><b>${esc(shareText)}</b></td>
+        <td class="ua-cell" title="${esc(`${uaCommit} · ${uaCondFull}`)}"><b>${esc(uaCommit)}</b><div class="small muted ellipsis-2">${esc(uaCond)}</div></td>
         <td>${badge(riskText)}</td>
         <td>${badge(d.final)}</td>
-        <td class="cell-long" title="${esc(p.decision?.nextAction||p.scorecard?.nextAction||'')}">${esc(next)}</td>
-        <td><div class="actions-inline"><button data-open-partner="${p.id}">Mở</button><button data-delete-partner="${p.id}">Xóa</button></div></td>
+        <td class="next-cell" title="${esc(nextFull)}">${esc(next)}</td>
       </tr>`;
     });
     const portfolioRisks=(db.partnerRisks||[]).filter(r=>includesSearch(r.partnerId,r.risk,r.level,r.owner)).map(r=>{
@@ -283,8 +301,10 @@
     const priority=stats.filter(x=>['Ưu tiên','Đạt'].includes(x.d.classification)).length;
     const ready=stats.filter(x=>x.d.hard==='ĐẠT'&&x.d.minimumGate==='ĐẠT'&&['Ưu tiên','Đạt'].includes(x.d.classification)).length;
     const blocked=stats.filter(x=>x.d.hard!=='ĐẠT'||x.r.high.length>0).length;
+    const legend=`<div class="score-legend"><span class="legend-title">Màu điểm theo rule file gốc</span><span><i class="legend-dot priority"></i>≥85 Ưu tiên</span><span><i class="legend-dot pass"></i>≥75 Đạt</span><span><i class="legend-dot conditional"></i>≥65 Có điều kiện</span><span><i class="legend-dot review"></i>&lt;65 Cần xem xét</span></div>`;
+    const partnerTable=table(['Đối tác','Thể loại','Giai đoạn','Tiềm lực SX /100','Phù hợp /100','Hợp tác','SAVA / Đối tác','UA','Rủi ro','Kết luận','Hành động tiếp theo'],rows,'partner-master-table');
     content.innerHTML=`<div class="grid kpis">${kpi('Đối tác đang hoạt động',active)}${kpi('Đối tác ưu tiên',priority,'Mức độ phù hợp ≥ 75/100')}${kpi('Sẵn sàng đi tiếp',ready,'Hard Gate + Evidence + điểm phù hợp đạt')}${kpi('Bị chặn / Risk cao',blocked,'Cần xử lý trước khi tăng cam kết')}</div>
-      ${panel('Danh sách đối tác',table(['Đối tác','Thể loại chính','Giai đoạn','Tiềm lực sản xuất /100','Mức độ phù hợp /100','Mô hình hợp tác','Phí đối tác','SAVA / Đối tác','Cam kết UA','Điều kiện UA','Rủi ro','Kết luận','Hành động tiếp theo',''],rows,'partner-master-table'),'Tập trung vào quyết định: năng lực sản xuất, mức độ phù hợp, cấu trúc hợp tác, cam kết UA, risk và bước tiếp theo.',`<button class="primary" data-action="add-partner">+ Partner</button>`)}
+      ${panel('Danh sách đối tác',legend+partnerTable,'Bảng rút gọn: mô hình + phí đối tác được gom ở Hợp tác; cam kết + điều kiện được gom ở UA. Click tên Partner để xem chi tiết.',`<button class="primary" data-action="add-partner">+ Partner</button>`)}
       ${panel('Tổng quan risk · Toàn bộ đối tác',table(['Đối tác','Risk','P×I','Mức độ','Cách xử lý','Trạng thái'],portfolioRisks),'Để thêm / sửa / xóa risk, mở đúng Partner ở bảng phía trên.')}`;
     bindOpeners();
   }

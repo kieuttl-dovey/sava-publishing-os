@@ -471,3 +471,9 @@ body{font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;text-ren
 .audit-old{color:#8a3a4e}
 .audit-new{color:#0756c9;font-weight:600}
 @media (max-width:900px){.audit-diff-row{grid-template-columns:1fr}.audit-diff-row b{display:none}}
+
+/* v0.30 · explicit source-of-truth hints for read-only/shared fields */
+.source-edit-note{margin:10px 0 12px;padding:11px 13px;border:1px solid rgba(7,65,225,.16);border-left:3px solid var(--electric-blue);border-radius:10px;background:#F7F9FF;color:var(--ink);font-size:11.5px;line-height:1.5}
+.source-edit-note.compact{margin:8px 0 10px;padding:9px 11px;font-size:11px}
+.field-source-note{margin-top:6px;font-size:10.5px;line-height:1.35;color:var(--electric-blue);font-weight:600}
+.commercial-fields .field:has(input:disabled),.commercial-fields .field:has(textarea:disabled),.commercial-fields .field:has(select:disabled){padding:8px;border:1px dashed rgba(7,65,225,.18);border-radius:10px;background:#FAFBFF}

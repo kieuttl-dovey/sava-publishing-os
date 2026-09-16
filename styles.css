@@ -555,3 +555,15 @@ body{font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;text-ren
 @media(max-width:1500px){.ceo-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.ceo-grid-primary{grid-template-columns:minmax(0,1.45fr) minmax(310px,.85fr)}.ceo-scatter-wrap{grid-template-rows:280px 26px}.ceo-road-row{grid-template-columns:170px minmax(300px,1fr) 112px}}
 @media(max-width:1180px){.ceo-grid-primary,.ceo-grid-secondary{grid-template-columns:1fr}.ceo-scatter-wrap{grid-template-rows:300px 26px}.ceo-attention-grid{grid-template-columns:1fr 1fr}.ceo-road-row{grid-template-columns:150px minmax(280px,1fr) 105px;overflow-x:auto}}
 @media(max-width:760px){.ceo-evidence-strip{grid-template-columns:1fr;margin-left:10px}.ceo-missing-market{margin-left:10px}.ceo-hero{align-items:flex-start;flex-direction:column}.ceo-hero h2{font-size:24px}.ceo-hero-status{justify-content:flex-start}.ceo-kpi-grid{grid-template-columns:1fr 1fr}.ceo-scatter-wrap{grid-template-rows:260px 26px;padding-right:10px}.ceo-bubble-name{display:none}.ceo-chart-legend small{display:none}.ceo-deal-row{grid-template-columns:90px minmax(150px,1fr) 52px}.ceo-attention-grid{grid-template-columns:1fr}.ceo-roadmap-list{overflow-x:auto}.ceo-road-row{min-width:650px}.ceo-funnel-row{grid-template-columns:64px minmax(0,1fr) 30px 32px}}
+
+/* v0.35 — market-driven CEO opportunity map */
+.ceo-bubble.coverage-gap .ceo-bubble-dot{background:#fff;box-shadow:0 2px 8px rgba(3,4,28,.08)}
+.ceo-bubble.coverage-gap.priority .ceo-bubble-dot{border:2.5px dashed var(--electric-blue)}
+.ceo-bubble.coverage-gap.test .ceo-bubble-dot{border:2.5px dashed var(--cyan)}
+.ceo-bubble.coverage-gap.selective .ceo-bubble-dot{border:2.5px dashed #776CEB}
+.ceo-bubble.coverage-gap.watch .ceo-bubble-dot{border:2.5px dashed #F0A33B}
+.ceo-bubble.coverage-gap.low .ceo-bubble-dot,.ceo-bubble.coverage-gap.data .ceo-bubble-dot{border:2.5px dashed #A5ADBD}
+.ceo-chart-legend .coverage-gap:before{background:#fff;border:1.8px dashed #7E8AA4;box-sizing:border-box}
+.ceo-evidence-strip.sourcing-gap{border-color:#C9D6FA;background:#F8FAFF}
+.ceo-evidence-strip.sourcing-gap>div:first-child b{color:#254AAB}
+.ceo-evidence-strip.sourcing-gap .ceo-evidence-chips button{border-color:#D5DFFA}

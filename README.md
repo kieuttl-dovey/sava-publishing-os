@@ -1,37 +1,47 @@
-# v0.34 — CEO Market Coverage & Mechanic Mapping
+# v0.35 — Market-Driven CEO Opportunity Map
 
-Bản này sửa bubble chart **Dòng game: Market × Năng lực thực thi** để không còn chỉ hiện những mechanic đã có đủ cả Market Score và Execution Fit.
+Bản này sửa logic Tổng quan theo đúng mô hình Publishing: **chọn thị trường trước → sau đó đi tìm game/đối tác phù hợp**. Candidate/Partner/Execution không còn quyết định một market có được ưu tiên hay không.
 
 ## Thay đổi chính
 
-### Hiển thị toàn bộ mechanic
-- Mọi mechanic có **Market Score** đều xuất hiện trên chart.
-- Mechanic chưa có **Execution Fit** vẫn xuất hiện bằng **bubble rỗng** ở dải “Chưa có evidence thực thi”; hệ thống không tự quy thiếu dữ liệu thành 0.
-- Mechanic chưa đủ **Market Score** được liệt kê riêng ở nhóm “Thiếu dữ liệu Market” thay vì biến mất.
-- Bỏ giới hạn 14 bubble.
-- Legend hiển thị đủ **P1 / P2 / P3 / P4 / P5** và trạng thái chưa có Execution evidence.
+### Dashboard TGĐ: Bản đồ cơ hội thị trường
+Chart cũ **Market × Năng lực thực thi** được thay bằng:
+- Trục X: **Sức hấp dẫn thị trường /100**
+- Trục Y: **Phù hợp chiến lược SAVA /100**
+- Kích thước bubble: **Revenue 30D**
+- Màu bubble: **P1 → P5**
+- Bubble đặc: đã có candidate/lead sourcing
+- Bubble rỗng nét đứt: **chưa có candidate/lead** — đây là khoảng trống sourcing, không phải điểm trừ của market.
 
-### Mapping Market ↔ Game Selection
-Bổ sung chuẩn hóa tên mechanic giữa hai module để các tên tương đương không bị mất liên kết, ví dụ:
-- Merge / Merge ...
-- Idle RPG / AFK Progression
-- Tower Defense / Defense RPG / RPG-TD
-- Arrow / Archer
-- Logic / Brain
-- Tycoon / Economy Management
+Góc trên phải giờ thể hiện đúng ý nghĩa: **market hấp dẫn + đúng hướng chiến lược SAVA**.
 
-Vẫn ưu tiên match chính xác trước; alias chỉ dùng cho các nhóm mechanic tương đương rõ ràng.
+### Khoảng trống sourcing
+Dưới chart có block **Khoảng trống sourcing**:
+- liệt kê market chưa có candidate/lead phù hợp;
+- ưu tiên hiển thị P1/P2 trước;
+- click vẫn mở Market Intelligence để drill-down.
 
-### UX
-- Label luôn hiện cho opportunity ưu tiên / execution cao; các bubble còn lại hiện tên khi hover để chart không bị chồng chữ.
-- Có chip danh sách những mechanic chưa có execution evidence để TGĐ nhìn ra ngay khoảng trống sourcing/candidate.
-- Click bubble/chip vẫn mở Market drill-down như trước.
+### P1–P5 không còn phụ thuộc Execution Fit
+Đã loại **Năng lực thực thi / Execution Fit** khỏi rule xếp P1–P5.
 
-## Update từ v0.33
+Priority market hiện dựa trên:
+1. Market Attractiveness
+2. Trend / Economics
+3. Strategic Fit
+
+Execution Fit vẫn được giữ ở Market Intelligence để biết **SAVA đã có evidence thực thi/candidate đến đâu**, nhưng chỉ là downstream coverage.
+
+### Priority Drill-down
+Modal “Vì sao P1/P2/…” giờ tách rõ:
+- tín hiệu dùng để xếp priority;
+- coverage sau khi chọn market: Candidate, Lead sourcing, Partner/Studio đã map, Execution evidence;
+- ghi rõ coverage **không dùng để nâng/hạ P1–P5**.
+
+## Update từ v0.34
 Ghi đè:
 - `app.js`
 - `styles.css`
 - `index.html`
 - `README.md`
 
-Không cần chạy SQL. Database, Auth và Audit không thay đổi.
+Không cần chạy SQL. Database, Auth, Audit và dữ liệu hiện tại không thay đổi.

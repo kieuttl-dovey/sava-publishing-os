@@ -207,19 +207,88 @@
     return data;
   }
 
+  const AUDIT_TABLE_LABELS = {
+    partners: 'Partner Selection',
+    partner_risks: 'Partner Risk',
+    games: 'Game Selection',
+    market_benchmarks: 'Market Intelligence',
+    publisher_landscape: 'Publisher Landscape',
+    deals: 'Deal Making',
+    sourcing: 'Sourcing',
+    projects: 'Publishing Operation',
+    app_config: 'Cấu hình hệ thống',
+    playbook_configs: 'Playbook / Rule',
+    profiles: 'Tài khoản / Phân quyền',
+    source_files: 'Tài liệu nguồn'
+  };
+  const AUDIT_ACTION_LABELS = { INSERT: 'Thêm', UPDATE: 'Sửa', DELETE: 'Xóa', UPLOAD: 'Upload', REPLACE: 'Thay file' };
+
+  function auditBaseData(row) {
+    if (!row || typeof row !== 'object') return {};
+    if (row.data && typeof row.data === 'object' && !Array.isArray(row.data)) return row.data;
+    const copy = { ...row };
+    ['created_at','updated_at','updated_by','actor_id','changed_at'].forEach(k => delete copy[k]);
+    return copy;
+  }
+  function flattenAudit(value, prefix = '', out = {}, depth = 0) {
+    if (depth > 5) { out[prefix] = value; return out; }
+    if (value === null || value === undefined || typeof value !== 'object') { if(prefix) out[prefix] = value; return out; }
+    if (Array.isArray(value)) { if(prefix) out[prefix] = value; return out; }
+    const keys = Object.keys(value);
+    if (!keys.length && prefix) out[prefix] = value;
+    for (const key of keys) flattenAudit(value[key], prefix ? `${prefix}.${key}` : key, out, depth + 1);
+    return out;
+  }
+  function auditChanges(oldRow, newRow, action) {
+    const oldFlat = flattenAudit(auditBaseData(oldRow));
+    const newFlat = flattenAudit(auditBaseData(newRow));
+    const keys = [...new Set([...Object.keys(oldFlat), ...Object.keys(newFlat)])].sort();
+    const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+    let changes = keys.filter(k => !same(oldFlat[k], newFlat[k])).map(k => ({ field:k, old:oldFlat[k], new:newFlat[k] }));
+    if (action === 'INSERT') changes = keys.slice(0, 12).map(k => ({ field:k, old:undefined, new:newFlat[k] }));
+    if (action === 'DELETE') changes = keys.slice(0, 12).map(k => ({ field:k, old:oldFlat[k], new:undefined }));
+    return changes;
+  }
   function mapAudit(logs, profiles) {
     const names = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name || p.email || 'User']));
-    return (logs || []).map(a => ({
-      at: a.changed_at,
-      user: names[a.actor_id] || 'System',
-      action: `${a.action} ${a.table_name}${a.record_id ? ` · ${a.record_id}` : ''}`
-    }));
+    return (logs || []).map(a => {
+      const actionType = String(a.action || '').toUpperCase();
+      const module = AUDIT_TABLE_LABELS[a.table_name] || a.table_name || 'Hệ thống';
+      const actionLabel = AUDIT_ACTION_LABELS[actionType] || a.action || 'Cập nhật';
+      const changes = auditChanges(a.old_data, a.new_data, actionType);
+      const record = a.record_id || '';
+      const suffix = changes.length ? ` · ${changes.length} trường` : '';
+      const summary = `${actionLabel} ${module}${record ? ` · ${record}` : ''}${suffix}`;
+      return {
+        id: a.id,
+        at: a.changed_at,
+        user: names[a.actor_id] || 'System',
+        action: summary,
+        summary,
+        actionType,
+        module,
+        tableName: a.table_name || '',
+        recordId: record,
+        changes,
+        oldData: a.old_data || null,
+        newData: a.new_data || null
+      };
+    });
   }
 
   async function checked(promise, label) {
     const { data, error } = await promise;
     if (error) throw new Error(`${label}: ${error.message}`);
     return data || [];
+  }
+
+  async function loadAudit(limit = 200) {
+    if (!session) await ensureSignedIn();
+    const [logs, profiles] = await Promise.all([
+      checked(client.from('audit_logs').select('*').order('changed_at', { ascending: false }).limit(limit), 'audit_logs'),
+      checked(client.from('profiles').select('id,email,full_name,role'), 'profiles')
+    ]);
+    return mapAudit(logs, profiles);
   }
 
   async function loadDb() {
@@ -237,7 +306,7 @@
       checked(client.from('deals').select('*').order('id'), 'deals'),
       checked(client.from('sourcing').select('*').order('id'), 'sourcing'),
       checked(client.from('projects').select('*').order('id'), 'projects'),
-      checked(client.from('audit_logs').select('*').order('changed_at', { ascending: false }).limit(100), 'audit_logs'),
+      checked(client.from('audit_logs').select('*').order('changed_at', { ascending: false }).limit(200), 'audit_logs'),
       checked(client.from('profiles').select('id,email,full_name,role'), 'profiles')
     ]);
 
@@ -435,6 +504,18 @@
     return true;
   }
 
+  async function logActivity(tableName, recordId, action, data = {}) {
+    if (!session) await ensureSignedIn();
+    const { error } = await client.rpc('log_app_activity', {
+      p_table_name: tableName,
+      p_record_id: recordId || null,
+      p_action: action,
+      p_new_data: data || {}
+    });
+    if (error) throw new Error(`Audit log: ${error.message}`);
+    return true;
+  }
+
   const SOURCE_BUCKET = 'publishing-source-workbooks';
 
   async function listSourceFiles() {
@@ -448,12 +529,15 @@
     if (!session) await ensureSignedIn();
     if (!profile) await loadProfile();
     if (profile.role !== 'admin') throw new Error('Chỉ Admin được thay file nguồn.');
+    let existed = false;
+    try { const items = await listSourceFiles(); existed = (items || []).some(x => x.name === path); } catch (_) { }
     const { error } = await client.storage.from(SOURCE_BUCKET).upload(path, file, {
       upsert: true,
       cacheControl: '3600',
       contentType: file.type || undefined
     });
     if (error) throw new Error(`Upload source file: ${error.message}`);
+    try { await logActivity('source_files', path, existed ? 'REPLACE' : 'UPLOAD', { name:file.name, size:file.size, type:file.type || '', storagePath:path }); } catch (e) { console.warn(e); }
     return true;
   }
 
@@ -532,6 +616,7 @@
       return loadDb();
     },
     loadDb,
+    loadAudit,
     syncDb,
     refreshProfile,
     accountAction,
@@ -543,6 +628,7 @@
     getSnapshot: () => snapshot ? clone(snapshot) : null,
     listSourceFiles,
     uploadSourceFile,
+    logActivity,
     downloadSourceFile
   };
 })();

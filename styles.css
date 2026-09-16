@@ -452,3 +452,22 @@ body{font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;text-ren
 .account-card{width:min(480px,100%)}
 .account-role-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:20px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#F7F9FE;font-size:13px}.account-role-row span{color:var(--muted)}.account-role-row strong{font-family:"Space Grotesk",sans-serif;color:var(--electric-blue)}
 .account-actions{display:grid;gap:10px;margin-top:22px}.account-actions button{min-height:42px}.danger-ghost{color:var(--bad)!important;border-color:rgba(220,38,38,.2)!important;background:#fff!important}.danger-ghost:hover{background:#FFF5F5!important}
+
+/* v0.29 · Audit log */
+.audit-notice{margin-bottom:16px}
+.audit-table{min-width:1180px}
+.audit-table th:nth-child(1){width:170px}
+.audit-table th:nth-child(2){width:150px}
+.audit-table th:nth-child(3){width:180px}
+.audit-table th:nth-child(4){width:170px}
+.audit-table th:nth-child(5){width:110px}
+.audit-details{max-width:620px}
+.audit-details summary{cursor:pointer;color:var(--ink);font-weight:600;line-height:1.45}
+.audit-diff-list{margin-top:10px;display:grid;gap:8px}
+.audit-diff-row{display:grid;grid-template-columns:minmax(150px,1.15fr) minmax(150px,1fr) 20px minmax(150px,1fr);gap:8px;align-items:start;padding:8px 10px;border:1px solid #e6e9f3;border-radius:10px;background:#fafbff}
+.audit-diff-row code{font-size:12px;white-space:normal;overflow-wrap:anywhere;color:#3a3a50}
+.audit-diff-row b{text-align:center;color:#a0a3bd}
+.audit-old,.audit-new{font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.audit-old{color:#8a3a4e}
+.audit-new{color:#0756c9;font-weight:600}
+@media (max-width:900px){.audit-diff-row{grid-template-columns:1fr}.audit-diff-row b{display:none}}

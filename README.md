@@ -1,3 +1,37 @@
+# v0.29 — Đồng bộ toàn bộ Edit → bảng ngoài + Audit log chi tiết
+
+- Double-check lại các tab có khả năng chỉnh sửa: **Partner Selection, Deal Making, Market Intelligence, Game Selection, Sourcing, Publishing Operation, Tài liệu nguồn**.
+- Sau khi lưu, view hiện tại render lại ngay từ cùng một record; các tab khác đọc lại cùng source-of-truth khi chuyển tab hoặc Refresh.
+- Fix thêm các điểm dễ lệch:
+  - **Partner Selection:** `Kết luận` ngoài bảng ưu tiên Decision Status / Recommendation đã lưu thay vì chỉ dùng kết luận tính tự động.
+  - **Deal Making:** Revenue Share ngoài bảng ưu tiên **Kết quả cuối → điều khoản hiện tại → RS mô hình**; quyết định phê duyệt cuối và điều kiện trước khi ký cũng được phản ánh ra bảng.
+  - **Sourcing:** tham chiếu mô hình hợp tác đọc đúng nguồn Partner/Deal dùng chung.
+- Thêm menu **8 · Lịch sử thay đổi**: xem người sửa, thời gian, module, record, hành động và diff `giá trị cũ → giá trị mới` theo từng field.
+- Dashboard `Cập nhật gần đây` đọc cùng audit log này.
+- Audit đã có trigger cho các bảng nghiệp vụ; v0.29 bổ sung coverage cho **Playbook/Rule, thay đổi role/profile và upload/replace file nguồn**.
+- Sau mỗi lần save lên Supabase, app tải lại Audit ngay để log xuất hiện tức thời, không phải chờ auto-refresh 60 giây.
+
+## Bắt buộc chạy SQL một lần
+
+Mở **Supabase → SQL Editor** và chạy:
+
+`docs/V0.29_AUDIT_MIGRATION.sql`
+
+SQL này không xóa dữ liệu. Nó chỉ mở rộng audit trigger/RPC cho các vùng chưa được log đầy đủ.
+
+---
+
+# v0.28 — Đồng bộ term Deal → Partner Selection
+
+- Sửa lỗi Partner Selection không cập nhật cột **SAVA / Đối tác** sau khi thay đổi term trong Deal Making.
+- Revenue Share hiển thị theo thứ tự nguồn: **Kết quả cuối của dòng Rev Share SAVA → Điều khoản thương mại hiện tại → RS dùng cho mô hình → dữ liệu Partner fallback**.
+- Đồng bộ thêm **Mô hình hợp tác, Phí/hỗ trợ Partner, Cam kết UA và Điều kiện UA** từ Deal Making sang Partner Selection.
+- Khi Partner đã có Deal liên kết, các field thương mại trong Edit Partner chuyển sang **chỉ đọc** và có nút **Mở Deal để sửa**, tránh nhập cùng một dữ liệu ở hai nơi.
+- Partner chưa có Deal vẫn được nhập term tạm thời; khi tạo Deal, Deal Making trở thành nguồn dữ liệu chính.
+- Không cần migration SQL.
+
+---
+
 # v0.25 — SAVA Brand refresh + Executive Dashboard
 
 - Áp dụng lại typography theo guideline: **Roboto** cho body/UI và **Space Grotesk** cho heading, KPI, display number.

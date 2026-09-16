@@ -627,7 +627,7 @@
   }
 
   function renderDashboard(){
-    setHeader('Tổng quan Publishing','SAVA Publishing · Tổng quan điều hành');
+    setHeader('Tổng quan điều hành','SAVA Publishing · Dành cho Tổng Giám Đốc');
 
     const partners=(db.partners||[]).map(p=>({p,d:partnerDerived(p)}));
     const games=(db.games||[]).map(g=>({g,d:gameDerived(g)}));
@@ -638,8 +638,6 @@
 
     const marketP1=market.filter(x=>x.direction?.key==='priority');
     const marketP2=market.filter(x=>x.direction?.key==='test');
-    const topMarket=[...marketP1,...marketP2].sort((a,b)=>(b.score??-1)-(a.score??-1))[0]||[...market].filter(x=>x.score!==null).sort((a,b)=>b.score-a.score)[0];
-
     const activeSourcing=sourcing.filter(x=>sourcingStatus(x)==='Đang xử lý');
     const stuck=activeSourcing.filter(x=>sourcingPipelineAlert(x)==='STUCK');
     const overdue=activeSourcing.filter(sourcingOverdue);
@@ -648,79 +646,156 @@
 
     const readyPartners=partners.filter(({d})=>d.hard==='ĐẠT'&&d.fit!==null&&d.fit>=75);
     const highPartnerRisks=(db.partnerRisks||[]).filter(r=>r.status!=='Đã đóng'&&['Cao','Nghiêm trọng'].includes(r.level||riskLevel(r.score)));
-    const partnerPending=partners.filter(({d})=>d.hard!=='ĐẠT'||d.minimumGate!=='ĐẠT');
-
     const gameProceed=games.filter(({d})=>/^Tiếp tục$/.test(d.selectionDecision));
     const gameConditional=games.filter(({d})=>/Tiếp tục có điều kiện/.test(d.selectionDecision));
     const gameGateOpen=games.filter(({d})=>d.hard!=='PASS');
-
     const activeDeals=deals.filter(({d})=>!['Tạm dừng','Đã đóng'].includes(d.status));
     const highRiskDeals=deals.filter(({x})=>x.riskScore!==null&&x.riskScore>=50);
     const dealReady=deals.filter(({d,x})=>/TIẾP TỤC/.test(String(dealDisplayDecision(d,x)||'').toUpperCase()));
-
     const opStageCounts=OPERATION_ROADMAP.map((_,i)=>projects.filter(p=>operationStageIndex(p)===i).length);
     const scaleProjects=opStageCounts[4]||0;
     const opAttention=projects.filter(p=>/FAIL|STOP|HOLD|TEST THÊM/i.test(String(p.gateReview?.result||p.latestDecision||'')));
+    const sourcingIssueIds=new Set([...stuck,...overdue].map(x=>x.id||x.leadId||JSON.stringify(x)));
+    const attentionCount=highPartnerRisks.length+sourcingIssueIds.size+gameGateOpen.length+highRiskDeals.length+opAttention.length;
 
-    const attentionCount=highPartnerRisks.length+stuck.length+overdue.length+gameGateOpen.length+highRiskDeals.length+opAttention.length;
-
-    const metric=(label,value,sub,tone='blue')=>`<div class="exec-metric ${tone}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub||'')}</small></div>`;
-    const navLink=(label,view)=>`<button class="exec-link" data-dash-nav="${view}">${esc(label)} →</button>`;
+    const navButton=(label,view)=>`<button type="button" class="ceo-card-link" data-dash-nav="${view}">${esc(label)} <span>→</span></button>`;
+    const kpi=(label,value,sub,view,tone='blue')=>`<button type="button" class="ceo-kpi ${tone}" data-dash-nav="${view}"><span class="ceo-kpi-label">${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub||'')}</small><i>↗</i></button>`;
 
     const focus=[];
-    highPartnerRisks.slice(0,3).forEach(r=>focus.push({tone:'bad',title:`Rủi ro Partner · ${r.partnerId}`,detail:r.risk||r.name||`${r.level||riskLevel(r.score)} risk`,view:'partners'}));
-    if(stuck.length)focus.push({tone:'bad',title:`${stuck.length} Lead vượt SLA`,detail:'Đã vượt thời gian xử lý chuẩn ở giai đoạn hiện tại; cần xử lý điểm nghẽn.',view:'sourcing'});
-    if(overdue.length)focus.push({tone:'warn',title:`${overdue.length} Lead quá hạn hành động`,detail:'Hành động tiếp theo đã quá hạn.',view:'sourcing'});
-    if(gameGateOpen.length)focus.push({tone:'warn',title:`${gameGateOpen.length} Game còn Hard Gate mở`,detail:'Cần đóng Hard Gate trước khi ra quyết định đi tiếp.',view:'games'});
-    if(highRiskDeals.length)focus.push({tone:'warn',title:`${highRiskDeals.length} Deal rủi ro cao`,detail:'Điểm rủi ro ≥50/100; cần rà lại bảo vệ, vốn và Revenue Share.',view:'deals'});
-    if(opAttention.length)focus.push({tone:'warn',title:`${opAttention.length} Project cần review Gate`,detail:'Có trạng thái Hold / Test thêm / Fail / Stop trong vận hành sau Deal.',view:'operations'});
-    if(!focus.length)focus.push({tone:'good',title:'Không có cảnh báo ưu tiên cao',detail:'Dữ liệu hiện tại chưa ghi nhận blocker hoặc rủi ro cần can thiệp ngay.',view:'dashboard'});
+    highPartnerRisks.slice(0,2).forEach(r=>focus.push({tone:'bad',title:`Rủi ro Partner · ${r.partnerId}`,detail:r.risk||r.name||`${r.level||riskLevel(r.score)} risk`,view:'partners'}));
+    if(stuck.length)focus.push({tone:'bad',title:`${stuck.length} Lead vượt SLA`,detail:'Sourcing đang bị kẹt ở stage hiện tại.',view:'sourcing'});
+    if(overdue.length)focus.push({tone:'warn',title:`${overdue.length} Lead quá hạn action`,detail:'Next Action đã quá deadline.',view:'sourcing'});
+    if(gameGateOpen.length)focus.push({tone:'warn',title:`${gameGateOpen.length} Game còn Hard Gate mở`,detail:'Cần đóng gate trước khi ra quyết định.',view:'games'});
+    if(highRiskDeals.length)focus.push({tone:'warn',title:`${highRiskDeals.length} Deal Risk ≥ 50`,detail:'Rà lại protection, vốn và term.',view:'deals'});
+    if(opAttention.length)focus.push({tone:'warn',title:`${opAttention.length} Project cần review Gate`,detail:'Có HOLD / TEST THÊM / FAIL / STOP.',view:'operations'});
+    if(!focus.length)focus.push({tone:'good',title:'Không có cảnh báo ưu tiên cao',detail:'Chưa ghi nhận blocker cần TGĐ xử lý.',view:'dashboard'});
 
-    const marketCards=[...marketP1,...marketP2].sort((a,b)=>(b.score??-1)-(a.score??-1)).slice(0,5).map(x=>`<button class="exec-list-row" data-open-market="${esc(x.m.Mechanic_ID)}"><div><b>${esc(x.m.Mechanic)}</b><small>${esc(x.direction.label)} · ${esc(x.trend.label)}</small></div><strong>${x.score===null?'—':fmt(x.score,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có market P1/P2 đủ dữ liệu.</div>';
+    // 1) Market × Execution — executive opportunity map
+    const scatterData=market.filter(x=>x.score!==null&&x.executionFit!==null)
+      .sort((a,b)=>((b.score||0)+(b.executionFit||0))-((a.score||0)+(a.executionFit||0)))
+      .slice(0,14);
+    const revenues=scatterData.map(x=>Math.max(0,Number(x.rev)||0));
+    const maxLog=Math.max(1,...revenues.map(v=>Math.log10(v+1)));
+    const scatterPoints=scatterData.map(x=>{
+      const sx=Math.max(4,Math.min(96,Number(x.score)||0));
+      const sy=Math.max(5,Math.min(95,Number(x.executionFit)||0));
+      const size=18+Math.round((Math.log10((Number(x.rev)||0)+1)/maxLog)*24);
+      const dir=x.direction?.key||'data';
+      const label=String(x.m.Mechanic||'—');
+      return `<button type="button" class="ceo-bubble ${dir}" style="--x:${sx}%;--y:${sy}%;--s:${size}px" data-open-market="${esc(x.m.Mechanic_ID)}" title="${esc(label)} · Market ${fmt(x.score,1)}/100 · Execution ${fmt(x.executionFit,1)}/100"><span class="ceo-bubble-dot"></span><span class="ceo-bubble-name">${esc(label)}</span></button>`;
+    }).join('');
+    const scatterEmpty=!scatterData.length?'<div class="ceo-chart-empty">Chưa đủ dữ liệu Market + Execution Fit để vẽ chart.</div>':'';
 
-    const topPartners=[...partners].filter(({d})=>d.fit!==null).sort((a,b)=>(b.d.fit??-1)-(a.d.fit??-1)).slice(0,5).map(({p,d})=>`<button class="exec-list-row" data-open-partner="${p.id}"><div><b>${esc(profile(p,'Tên Partner / Studio')||p.id)}</b><small>${esc(d.final)} · ${esc(profile(p,'Genre chính')||'—')}</small></div><strong>${fmt(d.fit,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có Partner đủ dữ liệu chấm điểm.</div>';
+    // 2) Top partners
+    const topPartnerData=[...partners].filter(({d})=>d.fit!==null).sort((a,b)=>(b.d.fit??-1)-(a.d.fit??-1)).slice(0,6);
+    const partnerBars=topPartnerData.map(({p,d},i)=>{
+      const name=profile(p,'Tên Partner / Studio')||p.id;
+      const prod=d.productionPotential?.overall;
+      const risks=partnerRiskStats(p.id);
+      return `<button type="button" class="ceo-rank-row" data-open-partner="${esc(p.id)}"><span class="ceo-rank-num">${i+1}</span><span class="ceo-rank-main"><b>${esc(name)}</b><span class="ceo-rank-track"><i style="width:${Math.max(0,Math.min(100,d.fit||0))}%"></i></span><small>${prod===null||prod===undefined?'Chưa có Production score':`Tiềm lực SX ${fmt(prod,1)}/100`}${risks.high?.length?` · ${risks.high.length} risk cao`:''}</small></span><strong>${fmt(d.fit,1)}</strong></button>`;
+    }).join('')||'<div class="ceo-chart-empty">Chưa có Partner đủ dữ liệu chấm điểm.</div>';
 
-    const topGames=[...games].filter(({d})=>d.prescan!==null).sort((a,b)=>(b.d.prescan??-1)-(a.d.prescan??-1)).slice(0,5).map(({g,d})=>`<button class="exec-list-row" data-open-game="${g.id}"><div><b>${esc(intake(g,'Game_Title')||g.id)}</b><small>${esc(d.selectionDecision)} · ${esc(intake(g,'Mechanic')||'—')}</small></div><strong>${fmt(d.prescan,1)}/100</strong></button>`).join('')||'<div class="exec-empty">Chưa có Game đủ dữ liệu Pre-Scan.</div>';
+    // 3) Deal terms — SAVA vs Partner revenue share
+    const dealTermData=activeDeals.map(({d,x})=>{
+      const commercial=dealCommercialSnapshot(d);
+      const partner=db.partners.find(p=>p.id===d.partnerId);
+      return {d,x,commercial,name:profile(partner,'Tên Partner / Studio')||d.partnerId||d.sourceDealId||d.id};
+    }).filter(z=>z.commercial?.sava!==null&&z.commercial?.partner!==null)
+      .sort((a,b)=>(b.commercial.sava??0)-(a.commercial.sava??0)).slice(0,7);
+    const dealBars=dealTermData.map(z=>{
+      const sava=Math.max(0,Math.min(1,z.commercial.sava));
+      const partner=Math.max(0,Math.min(1,z.commercial.partner));
+      const risk=z.x.riskScore;
+      return `<button type="button" class="ceo-deal-row" data-open-deal="${esc(z.d.id)}"><span class="ceo-deal-head"><b>${esc(z.name)}</b><small>${esc(z.d.status||'—')} · ${esc(z.commercial.rsSource||'RS')}</small></span><span class="ceo-rs-bar"><i class="sava" style="width:${sava*100}%"><em>${pct(sava,0)}</em></i><i class="partner" style="width:${partner*100}%"><em>${pct(partner,0)}</em></i></span><span class="ceo-risk-chip ${risk!==null&&risk>=50?'high':''}">${risk===null?'Risk —':`Risk ${fmt(risk,0)}`}</span></button>`;
+    }).join('')||'<div class="ceo-chart-empty">Chưa có Deal có Revenue Share để hiển thị.</div>';
 
-    const flow=STAGES.map((st,i)=>`<div class="exec-flow-step"><span>${i+1}</span><b>${st}</b><strong>${reached[st]||0}</strong>${i<STAGES.length-1?'<i>→</i>':''}</div>`).join('');
-    const opRoad=OPERATION_ROADMAP.map((s,i)=>`<div class="exec-op-step op-${i}"><span>${esc(s.code)}</span><b>${esc(s.title)}</b><strong>${opStageCounts[i]||0}</strong></div>`).join('');
+    // 4) Sourcing funnel + bottleneck
+    const stageConversions=STAGES.slice(0,-1).map((st,i)=>{
+      const next=STAGES[i+1],a=reached[st]||0,b=reached[next]||0;
+      return {from:st,to:next,a,b,rate:a?b/a:null};
+    });
+    const validConversions=stageConversions.filter(x=>x.rate!==null&&x.a>0);
+    const bottleneck=validConversions.length?[...validConversions].sort((a,b)=>a.rate-b.rate)[0]:null;
+    const funnelMax=Math.max(1,...STAGES.map(st=>reached[st]||0));
+    const funnelRows=STAGES.map((st,i)=>{
+      const count=reached[st]||0;
+      const conv=i?stageConversions[i-1]?.rate:null;
+      const isBottle=bottleneck&&i>0&&bottleneck.to===st;
+      return `<button type="button" class="ceo-funnel-row ${isBottle?'bottleneck':''}" data-dash-nav="sourcing"><span class="ceo-funnel-stage">${esc(st)}</span><span class="ceo-funnel-track"><i style="width:${Math.max(4,(count/funnelMax)*100)}%"></i></span><strong>${count}</strong><small>${i===0?'100%':conv===null?'—':pct(conv,0)}</small></button>`;
+    }).join('');
 
-    const summaryParts=[];
-    if(marketP1.length+marketP2.length)summaryParts.push(`${marketP1.length+marketP2.length} cơ hội thị trường P1/P2`);
-    if(gameProceed.length+gameConditional.length)summaryParts.push(`${gameProceed.length+gameConditional.length} game có thể đi tiếp`);
-    if(activeDeals.length)summaryParts.push(`${activeDeals.length} Deal đang theo dõi`);
-    if(projects.length)summaryParts.push(`${projects.length} dự án sau Deal`);
-    let executiveSummary=summaryParts.length?`Hiện có ${summaryParts.join(', ')}.`:'Chưa đủ dữ liệu để tạo tóm tắt điều hành.';
-    if(attentionCount)executiveSummary+=` Có ${attentionCount} vấn đề cần xem xét.`;
+    // 5) Portfolio roadmap
+    const roadmapRows=projects.slice(0,8).map(p=>{
+      const idx=Math.max(0,Math.min(OPERATION_ROADMAP.length-1,operationStageIndex(p)));
+      const result=String(p.gateReview?.result||p.latestDecision||'').toUpperCase();
+      const nodes=OPERATION_ROADMAP.map((s,i)=>{
+        let cls=i<idx?'done':i>idx?'future':'current';
+        if(i===idx&&/FAIL|STOP/.test(result))cls='fail';
+        else if(i===idx&&/HOLD|TEST THÊM/.test(result))cls='hold';
+        return `<span class="ceo-road-node ${cls}" title="${esc(s.title)}"><i></i><small>${esc(s.code)}</small></span>`;
+      }).join('<b class="ceo-road-line"></b>');
+      return `<button type="button" class="ceo-road-row" data-open-project="${esc(p.id)}"><span class="ceo-road-name"><b>${esc(p.name||p.id)}</b><small>${esc(p.monetizationModel||p.genre||'—')}</small></span><span class="ceo-road-track">${nodes}</span><span class="ceo-road-status">${badge(p.gateReview?.result||p.latestDecision||operationGateLabel(operationStageValue(p)))}</span></button>`;
+    }).join('')||'<div class="ceo-chart-empty">Chưa có project sau Deal.</div>';
 
-    content.innerHTML=`<div class="exec-dashboard">
-      <section class="exec-hero"><div class="exec-hero-copy"><div class="exec-hero-kicker">SAVA PUBLISHING OS</div><h2>Tổng quan SAVA Publishing</h2><p>${esc(executiveSummary)}</p><div class="exec-hero-meta"><span><b>${attentionCount}</b> vấn đề cần xem xét</span><span><b>${marketP1.length}</b> P1 · <b>${marketP2.length}</b> P2</span><span><b>${scaleProjects}</b> dự án ở Scale</span></div></div><img src="assets/sava-logo.png" alt="SAVA" class="exec-hero-logo"></section>
+    content.innerHTML=`<div class="ceo-dashboard">
+      <section class="ceo-hero">
+        <div><span class="ceo-kicker">SAVA PUBLISHING OS · EXECUTIVE</span><h2>Tổng quan điều hành Publishing</h2><p>Dữ liệu tổng hợp từ Market → Partner → Game → Deal → Operation</p></div>
+        <div class="ceo-hero-status"><span class="${attentionCount?'warn':'good'}"><b>${attentionCount}</b> cần xem</span><span><b>${marketP1.length}</b> P1</span><span><b>${scaleProjects}</b> Scale</span></div>
+      </section>
 
-      <div class="exec-metric-grid">
-        ${metric('Cơ hội thị trường',`${marketP1.length} P1 · ${marketP2.length} P2`,topMarket?`Ưu tiên: ${topMarket.m.Mechanic} · ${fmt(topMarket.score,1)}/100`:'Chưa đủ dữ liệu','cyan')}
-        ${metric('Lead đang xử lý',activeSourcing.length,`${qualified} Qualified · ${stuck.length} vượt SLA`,'blue')}
-        ${metric('Đối tác sẵn sàng',readyPartners.length,`${highPartnerRisks.length} rủi ro cao đang mở`,'purple')}
-        ${metric('Game đủ điều kiện',gameProceed.length+gameConditional.length,`${gameGateOpen.length} Hard Gate chưa đóng`,'cyan')}
-        ${metric('Deal đang theo dõi',activeDeals.length,`${dealReady.length} có thể tiếp tục · ${highRiskDeals.length} rủi ro cao`,'blue')}
-        ${metric('Dự án sau Deal',projects.length,`${scaleProjects} ở Scale · ${opAttention.length} cần review`,'purple')}
-      </div>
+      <section class="ceo-kpi-grid">
+        ${kpi('Cơ hội thị trường',`${marketP1.length+marketP2.length}`,`${marketP1.length} P1 · ${marketP2.length} P2`,'market','cyan')}
+        ${kpi('Lead đang xử lý',activeSourcing.length,`${qualified} Qualified · ${stuck.length} STUCK`,'sourcing','blue')}
+        ${kpi('Partner sẵn sàng',readyPartners.length,`${highPartnerRisks.length} risk cao đang mở`,'partners','purple')}
+        ${kpi('Game có thể đi tiếp',gameProceed.length+gameConditional.length,`${gameGateOpen.length} Hard Gate mở`,'games','cyan')}
+        ${kpi('Deal active',activeDeals.length,`${dealReady.length} có thể tiếp tục · ${highRiskDeals.length} risk cao`,'deals','blue')}
+        ${kpi('Project sau Deal',projects.length,`${scaleProjects} Scale · ${opAttention.length} cần review`,'operations','purple')}
+      </section>
 
-      <div class="exec-layout-main">
-        <section class="panel exec-attention"><div class="panel-head"><div><h2>Điểm cần xem xét</h2><p>Các blocker, rủi ro và quyết định cần ưu tiên theo dữ liệu hiện tại.</p></div><span class="exec-count">${attentionCount}</span></div><div class="panel-body exec-focus-list">${focus.slice(0,8).map(x=>`<button class="exec-focus ${x.tone}" data-dash-nav="${x.view}"><span></span><div><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div><i>→</i></button>`).join('')}</div></section>
-        <section class="panel"><div class="panel-head"><div><h2>Cơ hội thị trường ưu tiên</h2><p>Các mechanic P1/P2 theo Market Intelligence hiện tại.</p></div>${navLink('Xem Market','market')}</div><div class="panel-body exec-list">${marketCards}</div></section>
-      </div>
+      <section class="ceo-grid ceo-grid-primary">
+        <article class="panel ceo-card ceo-market-card">
+          <div class="ceo-card-head"><div><h2>Dòng game: Market × Năng lực thực thi</h2><p>Góc trên phải = Market hấp dẫn và SAVA có năng lực triển khai mạnh.</p></div>${navButton('Market Intelligence','market')}</div>
+          <div class="ceo-scatter-wrap">
+            <div class="ceo-axis-y"><span>100</span><b>Năng lực thực thi</b><span>0</span></div>
+            <div class="ceo-scatter">
+              <span class="ceo-quadrant q1">Ưu tiên nhìn trước</span><span class="ceo-quadrant q2">Market tốt · Execution thấp</span><span class="ceo-quadrant q3">Theo dõi</span><span class="ceo-quadrant q4">Execution tốt · Market thấp</span>
+              <i class="grid-v g25"></i><i class="grid-v g50"></i><i class="grid-v g75"></i><i class="grid-h g25"></i><i class="grid-h g50"></i><i class="grid-h g75"></i>
+              ${scatterPoints}${scatterEmpty}
+            </div>
+            <div class="ceo-axis-x"><span>0</span><b>Sức hấp dẫn thị trường</b><span>100</span></div>
+          </div>
+          <div class="ceo-chart-legend"><span class="priority">P1</span><span class="test">P2</span><span class="selective">P3</span><small>Kích thước bubble ~ Revenue 30D · click để drill-down</small></div>
+        </article>
 
-      ${panel('Tiến độ Funnel Publishing',`<div class="exec-flow">${flow}</div><div class="exec-flow-note"><b>Lead → Scale:</b> ${sourcing.length?pct((reached.Scale||0)/sourcing.length,2):'—'} · <b>Deal → Test:</b> ${reached.Deal?pct((reached.Test||0)/reached.Deal,1):'—'} · <b>Cần xử lý:</b> ${stuck.length+overdue.length}</div>`,'Tiến độ từ Lead đến Scale theo dữ liệu Sourcing dùng chung.',navLink('Xem Sourcing','sourcing'))}
+        <article class="panel ceo-card">
+          <div class="ceo-card-head"><div><h2>Top Partner</h2><p>Xếp theo Partner Fit /100.</p></div>${navButton('Partner Selection','partners')}</div>
+          <div class="ceo-rank-list">${partnerBars}</div>
+        </article>
+      </section>
 
-      <div class="exec-three-col">
-        ${panel('Đối tác ưu tiên',`<div class="exec-list">${topPartners}</div>`,'Xếp theo Partner Fit; Hard Gate vẫn override score.',navLink('Xem Partner','partners'))}
-        ${panel('Game ưu tiên',`<div class="exec-list">${topGames}</div>`,'Xếp theo Pre-Scan trước Test.',navLink('Xem Game','games'))}
-        ${panel('Deal & rủi ro',`<div class="exec-deal-summary"><div><span>Active Deal</span><b>${activeDeals.length}</b></div><div><span>Risk ≥50</span><b class="${highRiskDeals.length?'bad-text':''}">${highRiskDeals.length}</b></div><div><span>Có thể tiếp tục</span><b>${dealReady.length}</b></div></div><div class="exec-mini-note">Deal logic ưu tiên Hard Gate → RS → Risk/Protection → Capital → Readiness.</div>`,'Tóm tắt portfolio Deal.',navLink('Xem Deal','deals'))}
-      </div>
+      <section class="ceo-grid ceo-grid-secondary">
+        <article class="panel ceo-card">
+          <div class="ceo-card-head"><div><h2>Deal Term · Revenue Share</h2><p>Tỷ lệ SAVA / Partner theo term đang hiệu lực.</p></div>${navButton('Deal Making','deals')}</div>
+          <div class="ceo-rs-legend"><span><i class="sava"></i>SAVA</span><span><i class="partner"></i>Partner</span></div>
+          <div class="ceo-deal-list">${dealBars}</div>
+        </article>
 
-      ${panel('Lộ trình sau Deal',`<div class="exec-op-roadmap">${opRoad}</div><div class="exec-mini-note"><b>${projects.length}</b> project sau Deal · <b>${opAttention.length}</b> project đang có HOLD / TEST THÊM / FAIL / STOP.</div>`,'P0 → Product Test → Monetization → Expansion → Scale.',navLink('Xem Operation','operations'))}
+        <article class="panel ceo-card">
+          <div class="ceo-card-head"><div><h2>Publishing Funnel</h2><p>Conversion từ Lead → Scale.</p></div>${navButton('Sourcing','sourcing')}</div>
+          ${bottleneck?`<div class="ceo-bottleneck"><span>Bottleneck</span><b>${esc(bottleneck.from)} → ${esc(bottleneck.to)}</b><strong>${pct(bottleneck.rate,0)}</strong></div>`:''}
+          <div class="ceo-funnel-list">${funnelRows}</div>
+        </article>
+      </section>
 
-      ${panel('Cập nhật gần đây',(db.audit||[]).slice(0,8).map(a=>`<div class="exec-activity"><b>${esc(a.user)}</b><span>${esc(a.summary||a.action)}</span><small>${esc(a.at)}</small></div>`).join('')||'<div class="empty">Chưa có hoạt động gần đây.</div>','Lịch sử cập nhật dữ liệu quan trọng trên hệ thống.',navLink('Xem lịch sử','audit'))}
+      <article class="panel ceo-card ceo-roadmap-card">
+        <div class="ceo-card-head"><div><h2>Portfolio sau Deal</h2><p>Project đang nằm ở đâu trên roadmap vận hành.</p></div>${navButton('Publishing Operation','operations')}</div>
+        <div class="ceo-roadmap-list">${roadmapRows}</div>
+      </article>
+
+      <article class="panel ceo-card ceo-attention-card">
+        <div class="ceo-card-head"><div><h2>Cần TGĐ xem</h2><p>Chỉ hiển thị blocker / risk / gate cần chú ý.</p></div><span class="ceo-alert-count">${attentionCount}</span></div>
+        <div class="ceo-attention-grid">${focus.slice(0,6).map(x=>`<button type="button" class="ceo-alert ${x.tone}" data-dash-nav="${x.view}"><i></i><span><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></span><strong>→</strong></button>`).join('')}</div>
+      </article>
     </div>`;
 
     bindOpeners();

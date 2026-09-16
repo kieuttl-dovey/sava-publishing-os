@@ -1,34 +1,49 @@
-# v0.32 — Executive Drill-down System
+# v0.33 — CEO Visual Executive Dashboard
 
-Bản này kế thừa v0.31 và chuẩn hóa UX **click vào score / decision để xem “vì sao ra kết quả này”** ở các điểm quan trọng nhất của Publishing OS.
+Bản này redesign tab **Tổng quan** dành cho Tổng Giám Đốc theo hướng **ít chữ, nhiều chart, nhìn nhanh và drill-down được**.
 
-## Drill-down mới
+## Dashboard mới
 
-### Market Intelligence
-- **Sức hấp dẫn /100** → xem breakdown 4 nhóm: Quy mô, Đà tăng trưởng, Khả năng kiếm tiền, UA; hiển thị trọng số hiệu lực, contribution vào tổng điểm và raw evidence.
-- **P1 / P2 / P3 / P4 / P5** → xem rule nào đang kích hoạt, điều kiện đạt/chưa đạt, Trend 3M, Market Score, Strategic Fit, Execution Fit, Monetization và UA.
-- Giữ nguyên drill-down **Năng lực thực thi /100 → Candidate/Game** từ v0.31.
+### KPI strip
+6 KPI điều hành, click để đi thẳng tới module sở hữu dữ liệu:
+- Cơ hội thị trường P1/P2
+- Lead đang xử lý
+- Partner sẵn sàng
+- Game có thể đi tiếp
+- Deal active
+- Project sau Deal
 
-### Partner Selection
-- **Phù hợp /100** → xem 7 nhóm tạo nên Partner Fit, trọng số, contribution, Evidence coverage, confidence, Hard Gate, Risk và kết luận.
+### Dòng game: Market × Năng lực thực thi
+Bubble chart:
+- X = Sức hấp dẫn thị trường /100
+- Y = Năng lực thực thi SAVA /100
+- Kích thước bubble ~ Revenue 30D
+- Màu bubble = P1 / P2 / P3...
+- Click bubble → drill-down Market Intelligence
 
-### Deal Making
-- **Rủi ro /100** → xem 6 nhóm rủi ro theo đúng weight playbook: Partner, Game Evidence, Risk Tolerance, Competition, Bargaining, Protection; hiển thị contribution vào tổng Deal Risk.
+### Top Partner
+Horizontal ranking theo Partner Fit /100, có thêm Production Potential và cảnh báo risk cao. Click Partner → mở Partner Selection.
 
-### Publishing Operation
-- **Gate hiện tại** và **Decision** → xem KPI thực tế vs PASS rule, trạng thái từng metric, rule IAP/IAA, saved decision, auto-evaluate, reviewer và next action.
+### Deal Term · Revenue Share
+100% stacked bar hiển thị tỷ lệ **SAVA / Partner** theo term đang hiệu lực; kèm Deal Risk. Click row → mở Deal Making.
 
-## UX chuẩn hóa
-- Các giá trị có drill-down đều có hint `↗` và hover state thống nhất.
-- Modal dùng chung cấu trúc: **Kết quả → Breakdown / KPI → Evidence / Source → Decision → Action**.
-- Drill-down là read-only; nút action đưa người dùng tới đúng module/record sở hữu dữ liệu để sửa.
-- Không tạo field mới, không đổi công thức score và không đổi database schema.
-- Audit log v0.29 tiếp tục hoạt động cho mọi thay đổi khi user mở record và Save.
+### Publishing Funnel
+Visual conversion từ **Lead → Qualified → Evaluation → Deal → Test → Launch → Scale**. Tự highlight bottleneck có conversion thấp nhất.
 
-## Update từ v0.31
+### Portfolio sau Deal
+Roadmap compact cho từng project từ P0 → Product Test → Monetization → Expansion → Scale. Màu node phản ánh completed/current/hold/fail/future. Click project → mở Publishing Operation.
 
+### Cần TGĐ xem
+Chỉ giữ các blocker/risk/gate quan trọng, tối đa 6 alert, click để vào đúng module.
+
+## Logic / dữ liệu
+- Không tạo field mới.
+- Không đổi formula Market / Partner / Deal / Sourcing / Operation.
+- Chart đọc trực tiếp dữ liệu hiện tại từ Supabase qua cùng data layer.
+- Audit v0.29 và drill-down v0.32 giữ nguyên.
+
+## Update từ v0.32
 Ghi đè:
-
 - `app.js`
 - `styles.css`
 - `index.html`

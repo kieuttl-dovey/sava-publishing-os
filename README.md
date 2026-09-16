@@ -1,26 +1,37 @@
-# v0.30 — Chỉ rõ nơi chỉnh dữ liệu nguồn
+# v0.32 — Executive Drill-down System
 
-Bản này kế thừa toàn bộ v0.29 (sync Edit → bảng ngoài + Audit log) và bổ sung UX cho các dữ liệu dùng chung/read-only.
+Bản này kế thừa v0.31 và chuẩn hóa UX **click vào score / decision để xem “vì sao ra kết quả này”** ở các điểm quan trọng nhất của Publishing OS.
 
-## Thay đổi chính
+## Drill-down mới
 
-- Mọi field bị khóa do dữ liệu thuộc module khác sẽ có ghi chú ngay dưới field: **“Chỉ sửa tại …”**.
-- Partner Selection: term thương mại khi đã link Deal sẽ ghi rõ **Chỉ sửa tại Deal Making · Deal ID** ở từng field, không chỉ ở banner phía trên.
-- Market Intelligence: các block lấy từ Sourcing/Game Selection ghi rõ module sở hữu và nơi cần cập nhật dữ liệu nguồn.
-- Sourcing: các block tham chiếu Partner/Market ghi rõ Hard Gate/Fit/Risk sửa ở Partner Selection, term thương mại sửa ở Deal Making, benchmark market sửa ở Market Intelligence.
-- Deal Making và Game Selection: các chỉ số tự tính/read-only có note phân biệt rõ **tự tính** với **dữ liệu được chỉnh ở module nguồn**.
-- Viewer mode: thông báo rõ tài khoản Viewer không thể sửa ở bất kỳ module nào; muốn chỉnh cần Editor/Admin.
+### Market Intelligence
+- **Sức hấp dẫn /100** → xem breakdown 4 nhóm: Quy mô, Đà tăng trưởng, Khả năng kiếm tiền, UA; hiển thị trọng số hiệu lực, contribution vào tổng điểm và raw evidence.
+- **P1 / P2 / P3 / P4 / P5** → xem rule nào đang kích hoạt, điều kiện đạt/chưa đạt, Trend 3M, Market Score, Strategic Fit, Execution Fit, Monetization và UA.
+- Giữ nguyên drill-down **Năng lực thực thi /100 → Candidate/Game** từ v0.31.
 
-## Audit
+### Partner Selection
+- **Phù hợp /100** → xem 7 nhóm tạo nên Partner Fit, trọng số, contribution, Evidence coverage, confidence, Hard Gate, Risk và kết luận.
 
-Không thay đổi schema hoặc SQL so với v0.29. Audit log v0.29 tiếp tục ghi mọi thay đổi dữ liệu.
+### Deal Making
+- **Rủi ro /100** → xem 6 nhóm rủi ro theo đúng weight playbook: Partner, Game Evidence, Risk Tolerance, Competition, Bargaining, Protection; hiển thị contribution vào tổng Deal Risk.
 
-## Update từ v0.29
+### Publishing Operation
+- **Gate hiện tại** và **Decision** → xem KPI thực tế vs PASS rule, trạng thái từng metric, rule IAP/IAA, saved decision, auto-evaluate, reviewer và next action.
+
+## UX chuẩn hóa
+- Các giá trị có drill-down đều có hint `↗` và hover state thống nhất.
+- Modal dùng chung cấu trúc: **Kết quả → Breakdown / KPI → Evidence / Source → Decision → Action**.
+- Drill-down là read-only; nút action đưa người dùng tới đúng module/record sở hữu dữ liệu để sửa.
+- Không tạo field mới, không đổi công thức score và không đổi database schema.
+- Audit log v0.29 tiếp tục hoạt động cho mọi thay đổi khi user mở record và Save.
+
+## Update từ v0.31
 
 Ghi đè:
 
 - `app.js`
 - `styles.css`
+- `index.html`
 - `README.md`
 
-Không cần chạy thêm SQL.
+Không cần chạy SQL.

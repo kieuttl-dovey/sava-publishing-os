@@ -443,3 +443,12 @@ body{font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;text-ren
 @media(max-width:760px){
   .app-shell{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.nav button{white-space:normal}.nav-label{white-space:normal}.exec-hero h2{font-size:28px}.exec-hero p{font-size:14px}.exec-metric-grid{grid-template-columns:1fr 1fr}.table{font-size:13px}
 }
+
+/* v0.27 · First-login password setup + account security */
+.auth-account-chip{margin:18px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#F7F9FE;color:var(--ink);font-size:13px;font-weight:700;word-break:break-word}
+.password-hint{font-size:12px;line-height:1.45;color:var(--muted);margin-top:-4px}
+.good-text{color:#0A8F63!important}
+.account-overlay{background:rgba(3,4,28,.76);backdrop-filter:blur(8px)}
+.account-card{width:min(480px,100%)}
+.account-role-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:20px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#F7F9FE;font-size:13px}.account-role-row span{color:var(--muted)}.account-role-row strong{font-family:"Space Grotesk",sans-serif;color:var(--electric-blue)}
+.account-actions{display:grid;gap:10px;margin-top:22px}.account-actions button{min-height:42px}.danger-ghost{color:var(--bad)!important;border-color:rgba(220,38,38,.2)!important;background:#fff!important}.danger-ghost:hover{background:#FFF5F5!important}

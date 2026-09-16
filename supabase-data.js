@@ -7,6 +7,15 @@
     return;
   }
 
+  const authEntry = (() => {
+    const hash = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const search = new URLSearchParams(window.location.search || '');
+    return {
+      type: hash.get('type') || search.get('type') || '',
+      hasAuthToken: hash.has('access_token') || hash.has('refresh_token') || search.has('code') || search.has('token_hash')
+    };
+  })();
+
   const client = window.supabase.createClient(cfg.url, cfg.publishableKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -54,11 +63,115 @@
     if (root) root.hidden = true;
   }
 
+  function cleanAuthCallbackUrl() {
+    const url = new URL(window.location.href);
+    ['code','token_hash','type','redirect_to'].forEach(k => url.searchParams.delete(k));
+    const hash = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const authHash = hash.has('access_token') || hash.has('refresh_token') || ['invite','recovery','signup','magiclink'].includes(hash.get('type'));
+    if (authHash) url.hash = '';
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  async function waitForUrlSession(timeoutMs = 3500) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      if (data.session) return data.session;
+      await new Promise(r => setTimeout(r, 120));
+    }
+    return null;
+  }
+
+  function passwordSetupScreen({ firstTime = false, allowCancel = false, message = '' } = {}) {
+    let root = document.getElementById('authRoot');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'authRoot';
+      document.body.appendChild(root);
+    }
+    const email = session?.user?.email || profile?.email || '';
+    root.innerHTML = `
+      <div class="auth-screen">
+        <div class="auth-card">
+          <div class="auth-brand"><div class="brand-mark"><img src="assets/sava-logo.png" alt="SAVA" /></div><div><strong>SAVA</strong><span>Publishing OS</span></div></div>
+          <p class="eyebrow">${firstTime ? 'Thiết lập tài khoản lần đầu' : 'Bảo mật tài khoản'}</p>
+          <h1>${firstTime ? 'Tạo mật khẩu đăng nhập' : 'Đổi mật khẩu'}</h1>
+          <p class="muted">${firstTime ? 'Email đã được xác minh. Hãy tạo mật khẩu để những lần sau bạn có thể đăng nhập trực tiếp vào SAVA Publishing OS.' : 'Đặt mật khẩu mới cho tài khoản của bạn.'}</p>
+          ${email ? `<div class="auth-account-chip">${email}</div>` : ''}
+          <form id="passwordSetupForm" class="auth-form">
+            <label>Mật khẩu mới<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+            <label>Nhập lại mật khẩu<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+            <div class="password-hint">Tối thiểu 8 ký tự. Không chia sẻ mật khẩu qua chat hoặc email.</div>
+            <button class="primary" type="submit">${firstTime ? 'Lưu mật khẩu & vào hệ thống' : 'Cập nhật mật khẩu'}</button>
+            ${allowCancel ? '<button class="ghost" type="button" data-auth-cancel>Hủy</button>' : ''}
+            <div id="passwordSetupMessage" class="auth-message ${message ? 'bad-text' : ''}">${message || ''}</div>
+          </form>
+        </div>
+      </div>`;
+    root.hidden = false;
+    return root;
+  }
+
+  async function requirePasswordSetup({ firstTime = false, allowCancel = false } = {}) {
+    return new Promise((resolve) => {
+      const root = passwordSetupScreen({ firstTime, allowCancel });
+      const form = root.querySelector('#passwordSetupForm');
+      const cancel = root.querySelector('[data-auth-cancel]');
+      if (cancel) cancel.addEventListener('click', () => { hideAuthScreen(); resolve(false); });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = root.querySelector('#passwordSetupMessage');
+        const btn = form.querySelector('button[type=submit]');
+        const password = form.elements.password.value;
+        const confirmPassword = form.elements.confirmPassword.value;
+        if (password.length < 8) {
+          msg.className = 'auth-message bad-text';
+          msg.textContent = 'Mật khẩu cần tối thiểu 8 ký tự.';
+          return;
+        }
+        if (password !== confirmPassword) {
+          msg.className = 'auth-message bad-text';
+          msg.textContent = 'Hai mật khẩu chưa khớp.';
+          return;
+        }
+        btn.disabled = true;
+        msg.className = 'auth-message';
+        msg.textContent = 'Đang lưu mật khẩu…';
+        const currentMetadata = session?.user?.user_metadata || {};
+        const { data, error } = await client.auth.updateUser({
+          password,
+          data: {
+            ...currentMetadata,
+            sava_password_initialized: true,
+            sava_password_initialized_at: new Date().toISOString()
+          }
+        });
+        btn.disabled = false;
+        if (error) {
+          msg.className = 'auth-message bad-text';
+          msg.textContent = error.message;
+          return;
+        }
+        if (data?.user && session) session = { ...session, user: data.user };
+        msg.className = 'auth-message good-text';
+        msg.textContent = 'Đã cập nhật mật khẩu.';
+        if (firstTime) cleanAuthCallbackUrl();
+        setTimeout(() => { hideAuthScreen(); resolve(true); }, 450);
+      });
+    });
+  }
+
   async function ensureSignedIn() {
-    const res = await client.auth.getSession();
+    let res = await client.auth.getSession();
     if (res.error) throw res.error;
     session = res.data.session;
-    if (session) return session;
+    if (!session && authEntry.hasAuthToken) session = await waitForUrlSession();
+    if (session) {
+      if (authEntry.type === 'invite') await requirePasswordSetup({ firstTime: true, allowCancel: false });
+      else if (authEntry.type === 'recovery') await requirePasswordSetup({ firstTime: false, allowCancel: false });
+      return session;
+    }
 
     return new Promise((resolve) => {
       const root = authScreen();
@@ -372,11 +485,41 @@
     location.reload();
   }
 
+  function accountScreen() {
+    let root = document.getElementById('authRoot');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'authRoot';
+      document.body.appendChild(root);
+    }
+    const who = profile?.full_name || profile?.email || session?.user?.email || 'User';
+    const roleLabel = ({admin:'Admin',editor:'Editor',viewer:'Viewer'})[profile?.role] || profile?.role || 'Viewer';
+    root.innerHTML = `
+      <div class="auth-screen account-overlay">
+        <div class="auth-card account-card">
+          <div class="auth-brand"><div class="brand-mark"><img src="assets/sava-logo.png" alt="SAVA" /></div><div><strong>SAVA</strong><span>Publishing OS</span></div></div>
+          <p class="eyebrow">Tài khoản</p>
+          <h1>${who}</h1>
+          <div class="account-role-row"><span>Quyền truy cập</span><strong>${roleLabel}</strong></div>
+          <div class="account-actions">
+            <button class="primary" type="button" data-account-password>Đổi / thiết lập mật khẩu</button>
+            <button class="ghost" type="button" data-account-close>Đóng</button>
+            <button class="ghost danger-ghost" type="button" data-account-signout>Đăng xuất</button>
+          </div>
+        </div>
+      </div>`;
+    root.hidden = false;
+    root.querySelector('[data-account-close]').addEventListener('click', hideAuthScreen);
+    root.querySelector('[data-account-signout]').addEventListener('click', signOut);
+    root.querySelector('[data-account-password]').addEventListener('click', async () => {
+      await requirePasswordSetup({ firstTime: false, allowCancel: true });
+    });
+    return root;
+  }
+
   async function accountAction() {
     if (!profile) await loadProfile();
-    const who = profile.full_name || profile.email || 'User';
-    const ok = confirm(`${who}\nRole: ${profile.role}\n\nSign out?`);
-    if (ok) await signOut();
+    accountScreen();
   }
 
   window.SAVA_SUPABASE = {

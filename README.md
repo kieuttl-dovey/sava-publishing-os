@@ -429,3 +429,14 @@ The files under `data/` are empty fallbacks and do not contain the migrated inte
 - Rebuild Overview wording for management: `Tổng quan SAVA Publishing`, `Điểm cần xem xét`, clearer Vietnamese KPI labels and less internal/admin jargon.
 - Increase decision-card, market, funnel and roadmap readability while preserving the SAVA typography/color system.
 - Keep Roboto for operational text and Space Grotesk for headings/KPI, with SAVA Electric Blue / Azure / Cyan / Void / Iris palette.
+
+
+## v0.27 — First-login password setup
+
+- Invitation callback (`type=invite`) now pauses app loading and requires the invited user to create a password before entering SAVA Publishing OS.
+- Password must be at least 8 characters and confirmed twice.
+- Auth callback tokens are removed from the browser URL after the password is saved.
+- Recovery callbacks also open the password setup screen.
+- `Tài khoản` now opens an account panel with role, password change/setup, sign out and close actions.
+- Existing invited users who already entered the app without setting a password can use `Tài khoản → Đổi / thiết lập mật khẩu`.
+- No database migration is required.

@@ -1,52 +1,37 @@
-# v0.33 — CEO Visual Executive Dashboard
+# v0.34 — CEO Market Coverage & Mechanic Mapping
 
-Bản này redesign tab **Tổng quan** dành cho Tổng Giám Đốc theo hướng **ít chữ, nhiều chart, nhìn nhanh và drill-down được**.
+Bản này sửa bubble chart **Dòng game: Market × Năng lực thực thi** để không còn chỉ hiện những mechanic đã có đủ cả Market Score và Execution Fit.
 
-## Dashboard mới
+## Thay đổi chính
 
-### KPI strip
-6 KPI điều hành, click để đi thẳng tới module sở hữu dữ liệu:
-- Cơ hội thị trường P1/P2
-- Lead đang xử lý
-- Partner sẵn sàng
-- Game có thể đi tiếp
-- Deal active
-- Project sau Deal
+### Hiển thị toàn bộ mechanic
+- Mọi mechanic có **Market Score** đều xuất hiện trên chart.
+- Mechanic chưa có **Execution Fit** vẫn xuất hiện bằng **bubble rỗng** ở dải “Chưa có evidence thực thi”; hệ thống không tự quy thiếu dữ liệu thành 0.
+- Mechanic chưa đủ **Market Score** được liệt kê riêng ở nhóm “Thiếu dữ liệu Market” thay vì biến mất.
+- Bỏ giới hạn 14 bubble.
+- Legend hiển thị đủ **P1 / P2 / P3 / P4 / P5** và trạng thái chưa có Execution evidence.
 
-### Dòng game: Market × Năng lực thực thi
-Bubble chart:
-- X = Sức hấp dẫn thị trường /100
-- Y = Năng lực thực thi SAVA /100
-- Kích thước bubble ~ Revenue 30D
-- Màu bubble = P1 / P2 / P3...
-- Click bubble → drill-down Market Intelligence
+### Mapping Market ↔ Game Selection
+Bổ sung chuẩn hóa tên mechanic giữa hai module để các tên tương đương không bị mất liên kết, ví dụ:
+- Merge / Merge ...
+- Idle RPG / AFK Progression
+- Tower Defense / Defense RPG / RPG-TD
+- Arrow / Archer
+- Logic / Brain
+- Tycoon / Economy Management
 
-### Top Partner
-Horizontal ranking theo Partner Fit /100, có thêm Production Potential và cảnh báo risk cao. Click Partner → mở Partner Selection.
+Vẫn ưu tiên match chính xác trước; alias chỉ dùng cho các nhóm mechanic tương đương rõ ràng.
 
-### Deal Term · Revenue Share
-100% stacked bar hiển thị tỷ lệ **SAVA / Partner** theo term đang hiệu lực; kèm Deal Risk. Click row → mở Deal Making.
+### UX
+- Label luôn hiện cho opportunity ưu tiên / execution cao; các bubble còn lại hiện tên khi hover để chart không bị chồng chữ.
+- Có chip danh sách những mechanic chưa có execution evidence để TGĐ nhìn ra ngay khoảng trống sourcing/candidate.
+- Click bubble/chip vẫn mở Market drill-down như trước.
 
-### Publishing Funnel
-Visual conversion từ **Lead → Qualified → Evaluation → Deal → Test → Launch → Scale**. Tự highlight bottleneck có conversion thấp nhất.
-
-### Portfolio sau Deal
-Roadmap compact cho từng project từ P0 → Product Test → Monetization → Expansion → Scale. Màu node phản ánh completed/current/hold/fail/future. Click project → mở Publishing Operation.
-
-### Cần TGĐ xem
-Chỉ giữ các blocker/risk/gate quan trọng, tối đa 6 alert, click để vào đúng module.
-
-## Logic / dữ liệu
-- Không tạo field mới.
-- Không đổi formula Market / Partner / Deal / Sourcing / Operation.
-- Chart đọc trực tiếp dữ liệu hiện tại từ Supabase qua cùng data layer.
-- Audit v0.29 và drill-down v0.32 giữ nguyên.
-
-## Update từ v0.32
+## Update từ v0.33
 Ghi đè:
 - `app.js`
 - `styles.css`
 - `index.html`
 - `README.md`
 
-Không cần chạy SQL.
+Không cần chạy SQL. Database, Auth và Audit không thay đổi.

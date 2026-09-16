@@ -248,7 +248,29 @@
     const status=ovr!==null?'Dùng override':auto!==null?'Dùng AUTO':'Chưa có dữ liệu';
     return `<div class="score-override-card"><div class="score-override-head"><div><label>${esc(label)}</label><span>${help?esc(help):''}</span></div><b>${eff===null?'—':fmt(eff,2)}/5</b></div><div class="score-override-grid"><div><span>AUTO SCORE</span><strong>${auto===null?'—':fmt(auto,2)}</strong></div><div class="field"><label>Override thủ công</label><input name="${name}" type="number" min="1" max="5" step="0.1" value="${esc(ovr??'')}"></div></div><div class="score-override-status ${ovr!==null?'manual':'auto'}">${status}${ovr!==null?' · cần evidence tốt hơn':''}</div></div>`;
   }
-  function normalizeMechanicName(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,' ');}
+  function normalizeMechanicName(v){return String(v||'').trim().toLowerCase().replace(/[–—_]+/g,' ').replace(/\s+/g,' ');}
+  function canonicalMechanicKey(v){
+    const s=normalizeMechanicName(v).replace(/\([^)]*\)/g,' ').replace(/[^a-z0-9/+& ]+/g,' ').replace(/\s+/g,' ').trim();
+    if(!s)return '';
+    if(/\bmerge\b/.test(s))return 'merge';
+    if(/\b(idle rpg|afk|afk progression|idle role playing)\b/.test(s))return 'idle-rpg';
+    if(/\b(tower defense|tower defence|defense rpg|defence rpg|rpg \/ td|td \/ rpg)\b/.test(s)||s==='td')return 'tower-defense';
+    if(/\b(arrow|archer|archery)\b/.test(s))return 'arrow';
+    if(/\b(logic|brain|brain teaser|brain puzzle)\b/.test(s))return 'logic-brain';
+    if(/\b(tycoon|economy management|idle tycoon)\b/.test(s))return 'tycoon-economy';
+    return s;
+  }
+  function mechanicNamesMatch(a,b){
+    const na=normalizeMechanicName(a),nb=normalizeMechanicName(b);
+    if(!na||!nb)return false;
+    if(na===nb)return true;
+    const ca=canonicalMechanicKey(a),cb=canonicalMechanicKey(b);
+    if(ca&&cb&&ca===cb)return true;
+    // Conservative fallback for compound labels such as "Merge / Puzzle" vs "Merge".
+    const parts=v=>normalizeMechanicName(v).split(/[\/,&+|]/).map(x=>x.trim()).filter(x=>x.length>=4);
+    const pa=parts(a),pb=parts(b);
+    return pa.some(x=>pb.includes(x));
+  }
   const STRATEGIC_PUZZLE_IDS=new Set(['MECH-001','MECH-002','MECH-003','MECH-004','MECH-005','MECH-006','MECH-007','MECH-008','MECH-009','MECH-010','MECH-011','MECH-012']);
   const STRATEGIC_SIMULATION_IDS=new Set(['MECH-013','MECH-014','MECH-015','MECH-016','MECH-017','MECH-018','MECH-019','MECH-020','MECH-021','MECH-022']);
   const STRATEGIC_RPG_TD_IDS=new Set(['MECH-025','MECH-028','MECH-029','MECH-030']);
@@ -267,12 +289,12 @@
     return `<div class="shared-fit-card"><div class="shared-fit-head"><div><span>Phù hợp chiến lược SAVA /100 · Tự động</span><strong>${fmt(info.score,0)}/100</strong></div><span class="badge good">${esc(info.group)}</span></div><p><b>${esc(info.level)}</b>. ${esc(info.note)} Nguồn: ${esc(info.source)}. Đây là dữ liệu dùng chung từ Sourcing, không nhập lại tại Market Intelligence.</p></div>`;
   }
   function mechanicExecutionFit(mechanic){
-    const key=normalizeMechanicName(mechanic);
-    const games=(db.games||[]).filter(g=>normalizeMechanicName(intake(g,'Mechanic'))===key);
+    const games=(db.games||[]).filter(g=>mechanicNamesMatch(mechanic,intake(g,'Mechanic')));
     const scored=games.map(g=>({g,fit:gameSavaFitDerived(g)})).filter(x=>x.fit.score!==null);
     if(!scored.length)return {score:null,count:0,games:[],method:'Chưa có Game/Candidate cùng mechanic có SAVA Publishing Fit đủ dữ liệu'};
     const score=Math.round(scored.reduce((sum,x)=>sum+x.fit.score,0)/scored.length*10)/10;
-    return {score,count:scored.length,games:scored,method:'Trung bình SAVA Publishing Fit của Game/Candidate cùng mechanic trong Game Selection'};
+    const aliasUsed=scored.some(({g})=>normalizeMechanicName(intake(g,'Mechanic'))!==normalizeMechanicName(mechanic));
+    return {score,count:scored.length,games:scored,method:`Trung bình SAVA Publishing Fit của Game/Candidate cùng mechanic trong Game Selection${aliasUsed?' · có mapping tên mechanic tương đương':''}`};
   }
   function mechanicExecutionFitHtml(fit){
     if(!fit||fit.score===null)return `<div class="shared-fit-card empty-fit"><div><span>Năng lực thực thi đã chứng minh /100</span><strong>Chưa đủ dữ liệu</strong></div><p>Chưa có Game/Candidate cùng mechanic có đủ SAVA Publishing Fit trong Game Selection. Đây không được quy thành 0.</p></div>`;
@@ -671,20 +693,29 @@
     if(!focus.length)focus.push({tone:'good',title:'Không có cảnh báo ưu tiên cao',detail:'Chưa ghi nhận blocker cần TGĐ xử lý.',view:'dashboard'});
 
     // 1) Market × Execution — executive opportunity map
-    const scatterData=market.filter(x=>x.score!==null&&x.executionFit!==null)
-      .sort((a,b)=>((b.score||0)+(b.executionFit||0))-((a.score||0)+(a.executionFit||0)))
-      .slice(0,14);
+    // Show every mechanic with Market Score. Missing Execution Fit is not converted to zero:
+    // it is placed in a clearly labelled evidence band at the bottom of the chart.
+    const scatterData=market.filter(x=>x.score!==null)
+      .sort((a,b)=>((b.score||0)+(b.executionFit||0))-((a.score||0)+(a.executionFit||0)));
+    const scatterNoExecution=scatterData.filter(x=>x.executionFit===null);
+    const scatterMissingMarket=market.filter(x=>x.score===null);
     const revenues=scatterData.map(x=>Math.max(0,Number(x.rev)||0));
     const maxLog=Math.max(1,...revenues.map(v=>Math.log10(v+1)));
-    const scatterPoints=scatterData.map(x=>{
-      const sx=Math.max(4,Math.min(96,Number(x.score)||0));
-      const sy=Math.max(5,Math.min(95,Number(x.executionFit)||0));
-      const size=18+Math.round((Math.log10((Number(x.rev)||0)+1)/maxLog)*24);
+    const scatterPoints=scatterData.map((x,i)=>{
+      const sx=Math.max(3,Math.min(97,Number(x.score)||0));
+      const noExecution=x.executionFit===null;
+      const lane=(i%3)*2.2;
+      const sy=noExecution?3.5+lane:Math.max(13,Math.min(95,Number(x.executionFit)||0));
+      const size=16+Math.round((Math.log10((Number(x.rev)||0)+1)/maxLog)*22);
       const dir=x.direction?.key||'data';
       const label=String(x.m.Mechanic||'—');
-      return `<button type="button" class="ceo-bubble ${dir}" style="--x:${sx}%;--y:${sy}%;--s:${size}px" data-open-market="${esc(x.m.Mechanic_ID)}" title="${esc(label)} · Market ${fmt(x.score,1)}/100 · Execution ${fmt(x.executionFit,1)}/100"><span class="ceo-bubble-dot"></span><span class="ceo-bubble-name">${esc(label)}</span></button>`;
+      const execText=noExecution?'Chưa có evidence thực thi':`Execution ${fmt(x.executionFit,1)}/100`;
+      const showLabel=!noExecution&&(['priority','test','selective'].includes(dir)||Number(x.executionFit)>=80);
+      return `<button type="button" class="ceo-bubble ${dir}${noExecution?' no-execution':''}${showLabel?' show-label':''}" style="--x:${sx}%;--y:${sy}%;--s:${size}px" data-open-market="${esc(x.m.Mechanic_ID)}" title="${esc(label)} · Market ${fmt(x.score,1)}/100 · ${esc(execText)}"><span class="ceo-bubble-dot"></span><span class="ceo-bubble-name">${esc(label)}</span></button>`;
     }).join('');
-    const scatterEmpty=!scatterData.length?'<div class="ceo-chart-empty">Chưa đủ dữ liệu Market + Execution Fit để vẽ chart.</div>':'';
+    const scatterEmpty=!scatterData.length?'<div class="ceo-chart-empty">Chưa đủ Market Score để vẽ chart.</div>':'';
+    const noExecutionChips=scatterNoExecution.length?`<div class="ceo-evidence-strip"><div><b>Chưa có evidence thực thi</b><span>${scatterNoExecution.length} mechanic vẫn được hiển thị bằng bubble rỗng ở dải dưới.</span></div><div class="ceo-evidence-chips">${scatterNoExecution.map(x=>`<button type="button" data-open-market="${esc(x.m.Mechanic_ID)}">${esc(x.m.Mechanic)}</button>`).join('')}</div></div>`:'';
+    const missingMarketChips=scatterMissingMarket.length?`<details class="ceo-missing-market"><summary><b>Thiếu dữ liệu Market</b><span>${scatterMissingMarket.length} mechanic chưa thể đặt lên trục X</span></summary><div>${scatterMissingMarket.map(x=>`<button type="button" data-open-market="${esc(x.m.Mechanic_ID)}">${esc(x.m.Mechanic)}</button>`).join('')}</div></details>`:'';
 
     // 2) Top partners
     const topPartnerData=[...partners].filter(({d})=>d.fit!==null).sort((a,b)=>(b.d.fit??-1)-(a.d.fit??-1)).slice(0,6);
@@ -758,13 +789,14 @@
           <div class="ceo-scatter-wrap">
             <div class="ceo-axis-y"><span>100</span><b>Năng lực thực thi</b><span>0</span></div>
             <div class="ceo-scatter">
-              <span class="ceo-quadrant q1">Ưu tiên nhìn trước</span><span class="ceo-quadrant q2">Market tốt · Execution thấp</span><span class="ceo-quadrant q3">Theo dõi</span><span class="ceo-quadrant q4">Execution tốt · Market thấp</span>
+              <span class="ceo-quadrant q1">Ưu tiên nhìn trước</span><span class="ceo-quadrant q2">Market tốt · Execution thấp</span><span class="ceo-quadrant q3">Theo dõi</span><span class="ceo-quadrant q4">Execution tốt · Market thấp</span><span class="ceo-no-evidence-band-label">Chưa có evidence thực thi</span>
               <i class="grid-v g25"></i><i class="grid-v g50"></i><i class="grid-v g75"></i><i class="grid-h g25"></i><i class="grid-h g50"></i><i class="grid-h g75"></i>
               ${scatterPoints}${scatterEmpty}
             </div>
             <div class="ceo-axis-x"><span>0</span><b>Sức hấp dẫn thị trường</b><span>100</span></div>
           </div>
-          <div class="ceo-chart-legend"><span class="priority">P1</span><span class="test">P2</span><span class="selective">P3</span><small>Kích thước bubble ~ Revenue 30D · click để drill-down</small></div>
+          <div class="ceo-chart-legend"><span class="priority">P1</span><span class="test">P2</span><span class="selective">P3</span><span class="watch">P4</span><span class="low">P5</span><span class="no-evidence">Chưa có execution evidence</span><small>Đang hiển thị ${scatterData.length}/${market.length} mechanic trên chart · bubble ~ Revenue 30D</small></div>
+          ${noExecutionChips}${missingMarketChips}
         </article>
 
         <article class="panel ceo-card">

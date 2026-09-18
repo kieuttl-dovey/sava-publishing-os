@@ -1,4 +1,23 @@
-# v0.43 — Double-check đồng bộ toàn hệ thống
+# v0.44 — One Source of Truth cho Market Score
+
+## Sửa lỗi chính
+- `Thị trường /100` trong **Lựa chọn trò chơi** không còn tự tính lại theo công thức 5 cấu phần cũ.
+- Market Score giờ được tính **duy nhất tại Phân tích thị trường** và Game đọc lại nguyên điểm theo mechanic.
+- Công thức Market nguồn: Quy mô **trọng số 30%** · Growth **25%** · Khả năng kiếm tiền **20%** · UA **15%**; thiếu cấu phần thì tự phân bổ lại trọng số trên dữ liệu có sẵn.
+- Growth: DL 3M/6M/12M có trọng số **25%/15%/10%**; Revenue 3M/6M/12M có trọng số **25%/15%/10%**.
+- Monetization: RPD **trọng số 60%** + Top100 Grossing Presence **40%**.
+- CPI là input live của UA: chỉnh CPI tại Phân tích thị trường → UA percentile → Market Score → Game Market Score → Pre-Scan → Dashboard tự cập nhật khi Save/Refresh.
+- `Entry Accessibility` vẫn giữ làm evidence phụ nhưng không còn tạo một Market Score thứ hai.
+- Market override cũ ở Game được giữ trong record để truy vết nhưng không còn tham gia tính Market Score từ v0.44.
+
+## Data ownership
+**Phân tích thị trường sở hữu Market Score.** Lựa chọn trò chơi, Tìm kiếm cơ hội và Tổng quan chỉ đọc lại dữ liệu theo mechanic.
+
+## Update từ v0.43
+Ghi đè `app.js`, `index.html`, `README.md`. Không cần chạy SQL.
+
+---
+
 
 Đã rà lại toàn bộ 8 tab sau khi đổi công thức Growth/Market ở v0.42.
 

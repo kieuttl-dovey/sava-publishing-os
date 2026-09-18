@@ -1,95 +1,194 @@
-# v0.44 — One Source of Truth cho Market Score
+# SAVA Publishing OS v0.50 — Explicit Market Mapping & CPI Data Lineage
 
-## Sửa lỗi chính
-- `Thị trường /100` trong **Lựa chọn trò chơi** không còn tự tính lại theo công thức 5 cấu phần cũ.
-- Market Score giờ được tính **duy nhất tại Phân tích thị trường** và Game đọc lại nguyên điểm theo mechanic.
-- Công thức Market nguồn: Quy mô **trọng số 30%** · Growth **25%** · Khả năng kiếm tiền **20%** · UA **15%**; thiếu cấu phần thì tự phân bổ lại trọng số trên dữ liệu có sẵn.
-- Growth: DL 3M/6M/12M có trọng số **25%/15%/10%**; Revenue 3M/6M/12M có trọng số **25%/15%/10%**.
-- Monetization: RPD **trọng số 60%** + Top100 Grossing Presence **40%**.
-- CPI là input live của UA: chỉnh CPI tại Phân tích thị trường → UA percentile → Market Score → Game Market Score → Pre-Scan → Dashboard tự cập nhật khi Save/Refresh.
-- `Entry Accessibility` vẫn giữ làm evidence phụ nhưng không còn tạo một Market Score thứ hai.
-- Market override cũ ở Game được giữ trong record để truy vết nhưng không còn tham gia tính Market Score từ v0.44.
+## File cần replace
 
-## Data ownership
-**Phân tích thị trường sở hữu Market Score.** Lựa chọn trò chơi, Tìm kiếm cơ hội và Tổng quan chỉ đọc lại dữ liệu theo mechanic.
+Chỉ cần replace 2 file code sau trên repo hiện tại:
 
-## Update từ v0.43
-Ghi đè `app.js`, `index.html`, `README.md`. Không cần chạy SQL.
+- `app.js`
+- `index.html`
+
+`README.md` là changelog/tài liệu đi kèm, không bắt buộc để app chạy nhưng nên commit cùng version để truy vết logic.
 
 ---
 
+## Mục tiêu v0.50
 
-Đã rà lại toàn bộ 8 tab sau khi đổi công thức Growth/Market ở v0.42.
+Khóa lại **One Source of Truth cho Market Score** và loại bỏ các trường hợp một tab tự tạo điểm thị trường khi chưa map được Market Mechanic.
 
-## Kết quả rà soát
-- **Tổng quan:** dùng `marketAnalytics()` và `gameDerived()` live, nên P1/P2, Game có thể đi tiếp và Market map cập nhật theo công thức mới.
-- **Lựa chọn đối tác:** không phụ thuộc Market/Growth; không thay logic.
-- **Đàm phán & Thỏa thuận:** không dùng snapshot Market Score; không thay logic.
-- **Phân tích thị trường:** Growth weighted-recency + Monetization RPD/Grossing tính live; công thức trên UI ghi rõ **Trọng số %**.
-- **Lựa chọn trò chơi:** Market Size/Growth/Market Monetization/UA AUTO đọc live từ Phân tích thị trường; Market Score và Pre-Scan tự tính lại.
-- **Tìm kiếm cơ hội:** sửa mapping mechanic để dùng cùng `mechanicNamesMatch()` như Game/Market, tránh tên alias làm rơi về fallback chiến lược.
-- **Vận hành phát hành:** độc lập với Market Score; Gate/KPI giữ nguyên.
-- **Tài liệu nguồn & Lịch sử thay đổi:** read-only/lineage; edit dữ liệu nguồn vẫn được audit theo record sở hữu.
+Luồng chuẩn:
 
-## Hotfix trong v0.43
-1. Tất cả công thức Growth hiển thị rõ `Trọng số 25% / 15% / 10%`, không còn số 25/15/10 đứng riêng dễ hiểu nhầm là điểm.
-2. Market formula hiển thị `Trọng số 30% / 25% / 20% / 15%`.
-3. Monetization hiển thị `Trọng số 60% RPD / 40% Top100 Grossing`.
-4. Tìm kiếm cơ hội dùng cùng mapping mechanic alias với Phân tích thị trường/Lựa chọn trò chơi.
+`Phân tích thị trường (db.market)`  
+→ `Market Score theo Mechanic`  
+→ `Lựa chọn trò chơi / Game Market Score`  
+→ `Pre-Scan`  
+→ `Tổng quan / Dashboard`  
+→ `Tìm kiếm cơ hội` chỉ đọc lại khi Lead đã map Market Mechanic.
 
-# v0.41 — Làm rõ trọng số Growth
+Không tab downstream nào được tự dựng Market Score thứ hai.
 
-- Growth Score dùng 6 tín hiệu với **trọng số** rõ ràng: DL 3M/6M/12M = **25% / 15% / 10%** và Revenue 3M/6M/12M = **25% / 15% / 10%**. Đây là trọng số ưu tiên theo thời gian, **không phải điểm**.
-- Mỗi tín hiệu chấm 1–5 theo percentile của chính cửa sổ; thiếu dữ liệu được loại khỏi mẫu số, không coi là 0.
-- Growth chỉ hợp lệ khi có ≥2 tín hiệu và có ít nhất 1 DL + 1 Revenue.
-- Monetization = 60% RPD + 40% Top100 Grossing Presence; thiếu một metric thì re-normalize.
-- RPD không đi vào Growth để tránh double-count.
-- Growth AUTO + Market Monetization AUTO của Game Selection đọc trực tiếp từ Phân tích thị trường; manual override vẫn ưu tiên nếu có evidence.
-- Popup Cách tính Market Score hiển thị raw signal → score 1–5 → **trọng số (%)** → contribution; UI ghi rõ 25% / 15% / 10% là trọng số.
-- Edit Market bổ sung Growth 6M/12M, Top100 Grossing và Confidence.
-- Xu hướng 3M vẫn dùng rule matrix DL/Revenue song song, không lấy trung bình cộng.
-- Không thay đổi Hard Gate, Pre-Scan threshold hay SAVA Fit.
+---
 
-Bản này sửa rule màu tại **Lựa chọn trò chơi** để hai loại score không còn dùng chung một ngưỡng.
+## 1. Market Score — công thức đang dùng
 
-## Rule màu mới
+### Market Score /100
 
-### Thị trường /100
-- **≥75** → xanh: **Thị trường mạnh**
-- **55–74.9** → cam: **Cần kiểm chứng**
-- **<55** → đỏ: **Thị trường yếu**
-- Thiếu dữ liệu → xám
+`Market Score = 25% Quy mô + 20% Growth + 30% Monetization + 25% UA`
 
-### Phù hợp SAVA /100
-- **≥80** → xanh: **Phù hợp cao**
-- **60–79.9** → cam: **Phù hợp có điều kiện**
-- **<60** → đỏ: **Phù hợp thấp**
-- Thiếu dữ liệu → xám
+Nếu một cấu phần thiếu dữ liệu, cấu phần đó **không bị tính là 0**. Hệ thống tự chuẩn hóa lại trọng số trên các cấu phần còn dữ liệu.
 
-## Phạm vi áp dụng
-- Bảng Game decision pipeline.
-- Thanh điểm và label dưới score.
-- Popup cấu thành Market Score.
-- Popup cấu thành SAVA Fit.
-- Hồ sơ Game Quick View.
-- Legend giải thích màu ngay trên bảng được tách thành 2 dòng rule riêng.
+### Quy mô /100
 
-## Không thay đổi logic quyết định
+`Scale = 40% × Percentile(Downloads 30D) + 60% × Percentile(Revenue 30D)`
 
-Màu chỉ giúp đọc chất lượng **từng score**. Quyết định Pre-Scan vẫn dùng công thức trong workbook: Market 45% · Publishing Readiness 20% · Deal Economics 20% · SAVA Fit 15%, cùng Hard Gate. Không dùng màu của một score đơn lẻ để suy ra Proceed/Stop.
+- Downloads 30D = độ rộng demand/volume.
+- Revenue 30D = quy mô kinh tế tuyệt đối.
+- Đây là percentile tương đối trong dataset, **không phải market share %**.
+- RPD không nằm trong Scale.
 
-Không cần migration SQL.
+### Growth
 
-## Làm rõ cách đọc trọng số Growth
-- **3M = trọng số 25%** cho mỗi phía Downloads và Revenue.
-- **6M = trọng số 15%** cho mỗi phía.
-- **12M = trọng số 10%** cho mỗi phía.
-- Dữ liệu gần hiện tại được ưu tiên cao hơn; thiếu metric thì bỏ khỏi mẫu số và tự chuẩn hóa lại trọng số, không coi là 0.
+Trọng số raw Growth:
 
+- DL Growth 3M: **25%**
+- DL Growth 6M: **15%**
+- DL Growth 12M: **10%**
+- Revenue Growth 3M: **25%**
+- Revenue Growth 6M: **15%**
+- Revenue Growth 12M: **10%**
 
-## v0.42 · Recalculate Game Market Score
-- Game Market Score no longer keeps old AUTO snapshots for market-owned inputs.
-- Market Size, Growth, Market Monetization and UA AUTO are recalculated live from Phân tích thị trường.
-- Entry Accessibility remains owned by Competition.
-- Any manual Override remains authoritative and is shown in the score drill-down.
-- Therefore a change to Market data/formula immediately flows to Game Market Score and Pre-Scan after refresh.
+`25/15/10` là **trọng số**, không phải điểm.
+
+### Monetization
+
+`Monetization = 70% RPD Score + 30% Top100 Grossing Score`
+
+- **RPD = Revenue per Download = Revenue / Downloads**.
+- RPD đo giá trị kinh tế trên mỗi download, không phải raw download volume.
+- Top100 Grossing đo mức hiện diện trong nhóm game doanh thu cao.
+
+### UA
+
+Không dùng percentile CPI chung giữa các genre.
+
+Benchmark US hiện tại:
+
+- **Puzzle:** CPI `$10–15` = vùng Trung bình / bình thường.
+- **Tycoon / Simulation / Strategy / RPG-TD:** CPI `$4–6` = vùng Trung bình / bình thường.
+
+CPI thấp hơn vùng benchmark → UA Score tăng dần.  
+CPI cao hơn vùng benchmark → UA Score giảm dần.
+
+**v0.50 thay đổi:** nếu mechanic chưa map được vào benchmark UA, hệ thống để **UA Score = thiếu dữ liệu** và Market Score tự chuẩn hóa trên các cấu phần còn lại. Không fallback sang percentile CPI chéo genre.
+
+---
+
+## 2. Phân biệt hai loại CPI
+
+### CPI Median (Market)
+
+- Owner: **Phân tích thị trường**.
+- Ý nghĩa: benchmark CPI cấp mechanic/market.
+- Dùng để tính **UA component của Market Score**.
+- Khi cập nhật và Save Market:
+
+`CPI Median (Market)`  
+→ `UA Market Score`  
+→ `Market Score`  
+→ `Game Market Score`  
+→ `Pre-Scan`  
+→ `Dashboard / downstream snapshot`.
+
+### Test CPI Actual
+
+- Owner: **Vận hành phát hành / Product Test**.
+- Ý nghĩa: CPI thực tế của một game/cohort test cụ thể.
+- Dùng cho Product Test Gate.
+- Không được tự động coi là CPI Median của market.
+
+### Test CPI Benchmark
+
+- Benchmark dùng riêng để đánh Product Test Gate.
+- Tách biệt với CPI Median (Market).
+
+UI v0.50 đã đổi tên các field để tránh nhầm ba khái niệm trên.
+
+---
+
+## 3. Fix mapping trong Tìm kiếm cơ hội
+
+### Trước v0.50
+
+Nếu Lead không map được tới record trong Phân tích thị trường, hệ thống có thể fallback từ `Genre` thành điểm chiến lược:
+
+- đúng trọng tâm → 100
+- liền kề → 60
+- ngoài trọng tâm → 20
+
+Điểm fallback này có thể trông giống một Market Score thật dù không có Market record.
+
+### Từ v0.50
+
+**Đã xóa hoàn toàn fallback 100/60/20 khỏi Market Alignment của Lead.**
+
+Lead chỉ nhận Market Score khi:
+
+1. đã link Game và Mechanic của Game map được với Market record; hoặc
+2. BD chọn trực tiếp trường **Market Mechanic** trong Lead.
+
+Nếu không map được:
+
+- hiển thị **`Chưa map Market`**;
+- Market Score = `—`;
+- Screening action yêu cầu `link Game hoặc chọn Market Mechanic`;
+- không tự suy ra điểm từ Genre mô tả.
+
+`Genre` vẫn được giữ làm mô tả nhưng không còn tạo Market Score.
+
+---
+
+## 4. Mapping trong Lựa chọn trò chơi
+
+Game vẫn map Market theo trường `Mechanic`.
+
+- Map thành công + đủ dữ liệu → đọc đúng Market Score từ Phân tích thị trường.
+- Map thành công nhưng Market chưa đủ dữ liệu → `Đã map · chưa đủ dữ liệu`.
+- Không tìm thấy Market record → hiển thị **`Chưa map Market`** thay vì chỉ `—`.
+
+Market Score không sửa trực tiếp tại Game.
+
+---
+
+## 5. Data ownership
+
+| Dữ liệu | Owner | Downstream chỉ đọc |
+|---|---|---|
+| Downloads / Revenue / Growth / RPD / Top100 | Phân tích thị trường | Game, Dashboard, Sourcing |
+| CPI Median (Market) | Phân tích thị trường | UA Market Score, Game, Pre-Scan, Dashboard |
+| Market Score | Phân tích thị trường | Game, Pre-Scan, Dashboard, Sourcing |
+| Game Mechanic | Lựa chọn trò chơi | dùng để map Market |
+| Lead Market Mechanic | Tìm kiếm cơ hội | chỉ là khóa mapping, không tự tính Market Score |
+| Test CPI Actual | Vận hành phát hành | Product Test Gate |
+| Test CPI Benchmark | Vận hành phát hành | Product Test Gate |
+
+---
+
+## 6. Các tab đã được đồng bộ logic
+
+- **Tổng quan:** đọc derived score / snapshot đã refresh từ nguồn.
+- **Phân tích thị trường:** owner duy nhất của Market Score.
+- **Lựa chọn trò chơi:** đọc Market Score theo Game Mechanic; hiện rõ `Chưa map Market` khi thiếu mapping.
+- **Tìm kiếm cơ hội:** chỉ đọc Market Score khi có mapping hợp lệ; không fallback 100/60/20.
+- **Vận hành phát hành:** field CPI được đổi thành `Test CPI Actual` và `Test CPI Benchmark` để tách khỏi market CPI.
+- **Export / Supabase / GitHub:** derived snapshot vẫn được refresh trước khi persist/export theo logic đã khóa từ v0.45.
+
+Các tab Partner / Deal không tự tính Market Score.
+
+---
+
+## 7. Files / version
+
+- `app.js`: v0.50 logic + UI wording.
+- `index.html`: cache bust `app.js?v=0.50`, `styles.css?v=0.50`.
+- `README.md`: changelog và data lineage của v0.50.
+
+Không cần replace `styles.css`, `supabase-data.js`, `supabase-config.js` hoặc seed để áp dụng patch này.

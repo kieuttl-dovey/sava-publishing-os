@@ -46,3 +46,11 @@ Không cần migration SQL.
 - **6M = trọng số 15%** cho mỗi phía.
 - **12M = trọng số 10%** cho mỗi phía.
 - Dữ liệu gần hiện tại được ưu tiên cao hơn; thiếu metric thì bỏ khỏi mẫu số và tự chuẩn hóa lại trọng số, không coi là 0.
+
+
+## v0.42 · Recalculate Game Market Score
+- Game Market Score no longer keeps old AUTO snapshots for market-owned inputs.
+- Market Size, Growth, Market Monetization and UA AUTO are recalculated live from Phân tích thị trường.
+- Entry Accessibility remains owned by Competition.
+- Any manual Override remains authoritative and is shown in the score drill-down.
+- Therefore a change to Market data/formula immediately flows to Game Market Score and Pre-Scan after refresh.

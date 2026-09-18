@@ -1,3 +1,23 @@
+# v0.43 — Double-check đồng bộ toàn hệ thống
+
+Đã rà lại toàn bộ 8 tab sau khi đổi công thức Growth/Market ở v0.42.
+
+## Kết quả rà soát
+- **Tổng quan:** dùng `marketAnalytics()` và `gameDerived()` live, nên P1/P2, Game có thể đi tiếp và Market map cập nhật theo công thức mới.
+- **Lựa chọn đối tác:** không phụ thuộc Market/Growth; không thay logic.
+- **Đàm phán & Thỏa thuận:** không dùng snapshot Market Score; không thay logic.
+- **Phân tích thị trường:** Growth weighted-recency + Monetization RPD/Grossing tính live; công thức trên UI ghi rõ **Trọng số %**.
+- **Lựa chọn trò chơi:** Market Size/Growth/Market Monetization/UA AUTO đọc live từ Phân tích thị trường; Market Score và Pre-Scan tự tính lại.
+- **Tìm kiếm cơ hội:** sửa mapping mechanic để dùng cùng `mechanicNamesMatch()` như Game/Market, tránh tên alias làm rơi về fallback chiến lược.
+- **Vận hành phát hành:** độc lập với Market Score; Gate/KPI giữ nguyên.
+- **Tài liệu nguồn & Lịch sử thay đổi:** read-only/lineage; edit dữ liệu nguồn vẫn được audit theo record sở hữu.
+
+## Hotfix trong v0.43
+1. Tất cả công thức Growth hiển thị rõ `Trọng số 25% / 15% / 10%`, không còn số 25/15/10 đứng riêng dễ hiểu nhầm là điểm.
+2. Market formula hiển thị `Trọng số 30% / 25% / 20% / 15%`.
+3. Monetization hiển thị `Trọng số 60% RPD / 40% Top100 Grossing`.
+4. Tìm kiếm cơ hội dùng cùng mapping mechanic alias với Phân tích thị trường/Lựa chọn trò chơi.
+
 # v0.41 — Làm rõ trọng số Growth
 
 - Growth Score dùng 6 tín hiệu với **trọng số** rõ ràng: DL 3M/6M/12M = **25% / 15% / 10%** và Revenue 3M/6M/12M = **25% / 15% / 10%**. Đây là trọng số ưu tiên theo thời gian, **không phải điểm**.

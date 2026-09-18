@@ -77,6 +77,9 @@
     try { const raw=localStorage.getItem(LOCAL_KEY); return raw?JSON.parse(raw):null; } catch { return null; }
   }
   function persist(action='Updated data'){
+    // v0.45: keep persisted Game scorecard snapshots aligned with all live derived logic.
+    // UI has always read live values; this prevents stale marketScore/preScanScore in exports, Supabase rows, or downstream consumers.
+    refreshGameDerivedSnapshots();
     db.meta = db.meta || {};
     db.meta.lastModifiedAt = new Date().toISOString();
     db.audit = db.audit || [];
@@ -417,6 +420,24 @@
     const parts=insight?[insight.scale,insight.growth,insight.monetization,insight.ua]:[];
     const evidenceCount=parts.filter(v=>num(v)!==null).length;
     return {market,insight,score:insight?.score??null,evidenceCount,completeness:insight?.completeness??0};
+  }
+  function refreshGameDerivedSnapshots(){
+    (db.games||[]).forEach(g=>{
+      const sc=gameEnsureScoreLayers(g);
+      const der=gameDerived(g);
+      Object.assign(sc,{
+        marketScore:der.market,
+        productScore:der.product,
+        preScanScore:der.prescan,
+        finalScore:der.final,
+        dataCompleteness:der.completeness,
+        hardGate:der.hard,
+        decisionStage:der.stage,
+        recommendation:der.recommendation,
+        selectionDecision:der.selectionDecision,
+        evidenceDecision:der.evidenceDecision
+      });
+    });
   }
   function gameDerived(g){
     gameEnsureScoreLayers(g);
@@ -2046,7 +2067,7 @@
       sc.evidenceQuality=formNum(root,'evidenceQ');sc.productEvidenceSource=formVal(root,'evidenceSource');sc.decisionNotes=formVal(root,'notes');
       // Backward-compatible effective values. AUTO stays in sc.autoScores; manual changes stay in sc.overrides.
       GAME_SCORE_KEYS.forEach(k=>{sc[k]=gameEffectiveScore(g,k);});sc.savaFit=gameSavaFitEffective(g);
-      const der=gameDerived(g);Object.assign(sc,{marketScore:der.market,productScore:der.product,preScanScore:der.prescan,finalScore:der.final,dataCompleteness:der.completeness,hardGate:der.hard,decisionStage:der.stage,recommendation:der.recommendation,selectionDecision:der.selectionDecision,evidenceDecision:der.evidenceDecision});if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
+      if(isNew)db.games.push(g); else if(old!==g.id){db.sourcing.forEach(s=>{if(s.gameId===old)s.gameId=g.id;});db.deals.forEach(d=>{if(d.gameId===old)d.gameId=g.id;});}modalRoot.innerHTML='';persist(`${isNew?'Added':'Updated'} game ${g.id}`);},{wide:true});
   }
 
   function sourcingEditGuide(){return `<div class="sourcing-edit-guide"><div class="guide-title">Hướng dẫn BD</div><div class="guide-grid"><div><b>1. Screening → Qualified</b><p>“Loại” = Không Qualified. “Cân nhắc / Tiếp tục / Tiếp tục nhưng cần chỉnh sửa” = Qualified và vào Evaluation.</p></div><div><b>2. Deal → Test</b><p>Không nhập Ngày Test nếu chưa có Ngày Deal/ký hợp đồng. Test chỉ bắt đầu sau Deal.</p></div><div><b>3. Lead đang xử lý</b><p>Bắt buộc có BD phụ trách, Hành động tiếp theo và Hạn hành động để hệ thống theo dõi STUCK/quá hạn.</p></div><div><b>4. Phân tích thị trường</b><p>Nếu Lead đã link Game hoặc match đúng mechanic, hệ thống tự lấy Định hướng + Sức hấp dẫn từ Phân tích thị trường; không nhập lại. Nếu chưa map được mới dùng nhóm chiến lược fallback.</p></div></div></div>`;}
@@ -2126,11 +2147,11 @@
     try{const u=`https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${g.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(g.branch)}`;const r=await fetch(u,{headers:{Accept:'application/vnd.github+json',Authorization:`Bearer ${t}`,'X-GitHub-Api-Version':'2022-11-28'}});if(!r.ok)throw new Error(`${r.status} ${await r.text()}`);const j=await r.json();githubSha=j.sha;const remote=JSON.parse(b64decode(j.content));remote.settings={...(remote.settings||{}),github:localSettings.github,currentUser:localSettings.currentUser||''};db=remote;localStorage.setItem(LOCAL_KEY,JSON.stringify(db));msg.textContent=`Pulled ${g.path} · SHA ${githubSha.slice(0,8)}. Local view updated.`;render();toast('Pulled latest GitHub data');}catch(e){msg.textContent=`Pull failed: ${e.message}`;}
   }
   async function githubPush(root){
-    saveSyncSettings(root);const g=db.settings.github,t=sessionStorage.getItem(TOKEN_KEY);const msg=root.querySelector('#syncMsg');if(!g.owner||!g.repo||!t){msg.textContent='Owner, repo and token are required.';return;}if(!githubSha){msg.textContent='Pull latest from GitHub first. This prevents overwriting a teammate\'s newer commit.';return;}msg.textContent='Committing data…';
+    saveSyncSettings(root);refreshGameDerivedSnapshots();const g=db.settings.github,t=sessionStorage.getItem(TOKEN_KEY);const msg=root.querySelector('#syncMsg');if(!g.owner||!g.repo||!t){msg.textContent='Owner, repo and token are required.';return;}if(!githubSha){msg.textContent='Pull latest from GitHub first. This prevents overwriting a teammate\'s newer commit.';return;}msg.textContent='Committing data…';
     try{const u=`https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${g.path.split('/').map(encodeURIComponent).join('/')}`;const body={message:`Update Publishing OS data${db.settings.currentUser?' by '+db.settings.currentUser:''}`,content:b64encode(JSON.stringify(db,null,2)),branch:g.branch,sha:githubSha};const r=await fetch(u,{method:'PUT',headers:{Accept:'application/vnd.github+json',Authorization:`Bearer ${t}`,'X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`${r.status} ${await r.text()}`);const j=await r.json();githubSha=j.content?.sha||null;msg.textContent=`Committed successfully${githubSha?' · SHA '+githubSha.slice(0,8):''}.`;toast('Committed data to GitHub');}catch(e){msg.textContent=`Push failed: ${e.message}. Another teammate may have changed the file; Pull latest, review, then push again.`;}
   }
 
-  function exportJson(){const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`sava-publishing-os-${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
+  function exportJson(){refreshGameDerivedSnapshots();const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`sava-publishing-os-${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
   function importJson(file){if(window.SAVA_SUPABASE?.configured&&!window.SAVA_SUPABASE.canDelete()){alert('Only Admin can import a full database.');return;}const fr=new FileReader();fr.onload=()=>{try{const x=JSON.parse(fr.result);if(!x.partners||!x.games)throw new Error('Not a Publishing OS database');db=x;persist('Imported JSON database');toast('Imported database and queued cloud sync');}catch(e){alert(`Import failed: ${e.message}`);}};fr.readAsText(file);}
 
   document.addEventListener('click',e=>{

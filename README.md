@@ -1,25 +1,29 @@
-# v0.37 — Game drill-down & hồ sơ nhanh
+# v0.38 — Màu điểm theo chất lượng tín hiệu
 
 ## Lựa chọn trò chơi
 
-Bảng Game được nâng từ bảng kết quả thành dashboard có thể drill-down:
+UI của **Thị trường /100** và **Phù hợp SAVA /100** được chỉnh theo feedback sử dụng thực tế:
 
-- **Click Tên Game hoặc Game ID** → mở **Hồ sơ Game** dạng Quick View.
-- Hồ sơ Game hiển thị thông tin Candidate, Studio/Partner, Mechanic, GEO, Monetization, Build stage, Owner, trạng thái luồng, Deal/Sourcing liên quan và link Store/Build/APK nếu đã có dữ liệu.
-- **Click Partner/Studio đã map** → mở **Hồ sơ đối tác** nhanh, có Partner Fit, Tiềm lực sản xuất, Hard Gate, Risk, Deal term và các Game/Candidate liên quan.
+- **Loại điểm được phân biệt bằng tên/label**, không khóa bằng một màu cố định.
+- **Màu của điểm thể hiện chất lượng tín hiệu**:
+  - **>75** → xanh: **Tín hiệu tốt**
+  - **60–75** → cam: **Cần kiểm chứng**
+  - **<60** → đỏ: **Cần xem xét**
+  - thiếu dữ liệu → xám
+- Áp dụng đồng nhất tại:
+  - bảng Game decision pipeline;
+  - popup cấu thành Market Score;
+  - popup cấu thành SAVA Fit;
+  - Hồ sơ Game Quick View.
+- Dòng hướng dẫn trên bảng có legend màu rõ ràng để người xem không hiểu màu là loại score.
 
-## Tách rõ 2 loại score
+## Không thay đổi logic chấm điểm
 
-- **Thị trường /100**: Cyan/Azure. Click để xem 5 cấu phần Market Score, trọng số, AUTO/Override, công thức và evidence thị trường.
-- **Phù hợp SAVA /100**: Electric Blue/Indigo. Click để xem 7 tiêu chí SAVA Publishing Fit, cách quy đổi, coverage, confidence và evidence/override.
+v0.38 chỉ thay **cách thể hiện UI/UX**. Công thức Market Score, SAVA Publishing Fit, Pre-Scan, Product Evidence và Hard Gate vẫn giữ nguyên theo workbook/source logic hiện tại.
 
-Hai score được giữ độc lập về ý nghĩa và màu sắc; không thay đổi scoring framework gốc.
+Ngưỡng màu dùng để giúp scan nhanh chất lượng tín hiệu của từng score; quyết định cuối vẫn phải đọc cùng Hard Gate, Pre-Scan và evidence.
 
-## Đồng bộ score
-
-Cột **Phù hợp SAVA /100** ngoài bảng dùng đúng **effective score**: Override (nếu có) → AUTO từ 7 tiêu chí. Vì vậy chỉnh Override trong Edit Game sẽ phản ánh ngay ra bảng và Pre-Scan.
-
-## Cập nhật từ v0.36
+## Cập nhật từ v0.37
 
 Ghi đè 4 file:
 
@@ -28,4 +32,4 @@ Ghi đè 4 file:
 - `index.html`
 - `README.md`
 
-Không cần chạy SQL. Audit log v0.29 tiếp tục hoạt động cho các thay đổi dữ liệu.
+Không cần chạy SQL. Audit log hiện tại tiếp tục hoạt động.

@@ -1,35 +1,31 @@
-# v0.38 — Màu điểm theo chất lượng tín hiệu
+# v0.39 — Tách ngưỡng màu Market Score và SAVA Fit
 
-## Lựa chọn trò chơi
+Bản này sửa rule màu tại **Lựa chọn trò chơi** để hai loại score không còn dùng chung một ngưỡng.
 
-UI của **Thị trường /100** và **Phù hợp SAVA /100** được chỉnh theo feedback sử dụng thực tế:
+## Rule màu mới
 
-- **Loại điểm được phân biệt bằng tên/label**, không khóa bằng một màu cố định.
-- **Màu của điểm thể hiện chất lượng tín hiệu**:
-  - **>75** → xanh: **Tín hiệu tốt**
-  - **60–75** → cam: **Cần kiểm chứng**
-  - **<60** → đỏ: **Cần xem xét**
-  - thiếu dữ liệu → xám
-- Áp dụng đồng nhất tại:
-  - bảng Game decision pipeline;
-  - popup cấu thành Market Score;
-  - popup cấu thành SAVA Fit;
-  - Hồ sơ Game Quick View.
-- Dòng hướng dẫn trên bảng có legend màu rõ ràng để người xem không hiểu màu là loại score.
+### Thị trường /100
+- **≥75** → xanh: **Thị trường mạnh**
+- **55–74.9** → cam: **Cần kiểm chứng**
+- **<55** → đỏ: **Thị trường yếu**
+- Thiếu dữ liệu → xám
 
-## Không thay đổi logic chấm điểm
+### Phù hợp SAVA /100
+- **≥80** → xanh: **Phù hợp cao**
+- **60–79.9** → cam: **Phù hợp có điều kiện**
+- **<60** → đỏ: **Phù hợp thấp**
+- Thiếu dữ liệu → xám
 
-v0.38 chỉ thay **cách thể hiện UI/UX**. Công thức Market Score, SAVA Publishing Fit, Pre-Scan, Product Evidence và Hard Gate vẫn giữ nguyên theo workbook/source logic hiện tại.
+## Phạm vi áp dụng
+- Bảng Game decision pipeline.
+- Thanh điểm và label dưới score.
+- Popup cấu thành Market Score.
+- Popup cấu thành SAVA Fit.
+- Hồ sơ Game Quick View.
+- Legend giải thích màu ngay trên bảng được tách thành 2 dòng rule riêng.
 
-Ngưỡng màu dùng để giúp scan nhanh chất lượng tín hiệu của từng score; quyết định cuối vẫn phải đọc cùng Hard Gate, Pre-Scan và evidence.
+## Không thay đổi logic quyết định
 
-## Cập nhật từ v0.37
+Màu chỉ giúp đọc chất lượng **từng score**. Quyết định Pre-Scan vẫn dùng công thức trong workbook: Market 45% · Publishing Readiness 20% · Deal Economics 20% · SAVA Fit 15%, cùng Hard Gate. Không dùng màu của một score đơn lẻ để suy ra Proceed/Stop.
 
-Ghi đè 4 file:
-
-- `app.js`
-- `styles.css`
-- `index.html`
-- `README.md`
-
-Không cần chạy SQL. Audit log hiện tại tiếp tục hoạt động.
+Không cần migration SQL.

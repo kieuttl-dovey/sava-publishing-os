@@ -577,7 +577,7 @@ body{font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;text-ren
 @media(max-width:900px){.entity-hero-grid{grid-template-columns:repeat(2,1fr)}.entity-quick-grid{grid-template-columns:1fr}.game-score-hero{align-items:flex-start;flex-direction:column}.game-score-hero-meta{justify-content:flex-start}.market-evidence-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.modal.entity-quick-modal{width:calc(100vw - 18px)}.entity-hero-grid{grid-template-columns:1fr 1fr}.entity-field-grid{grid-template-columns:1fr}.identity-score{grid-template-columns:36px 64px}.game-drill-guide{align-items:flex-start;flex-direction:column;gap:6px}}
 
-/* v0.38 — Game score colors reflect quality, while labels identify score type. */
+/* v0.39 — Market Score and SAVA Fit use separate quality thresholds. */
 .identity-score.quality-good strong{color:#168A5B}.identity-score.quality-good>span i{background:linear-gradient(90deg,#42C982,#168A5B)}
 .identity-score.quality-watch strong{color:#B86C00}.identity-score.quality-watch>span i{background:linear-gradient(90deg,#F6B84A,#E28A0A)}
 .identity-score.quality-weak strong{color:#C42D45}.identity-score.quality-weak>span i{background:linear-gradient(90deg,#E96B7D,#C42D45)}
@@ -592,3 +592,6 @@ body{font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;text-ren
 .entity-score-card.game-score.quality-weak{box-shadow:inset 0 3px 0 #D9485D}.entity-score-card.game-score.quality-weak strong{color:#C42D45}.entity-score-card.game-score.quality-weak small{color:#C42D45}
 .entity-score-card.game-score.quality-na{box-shadow:inset 0 3px 0 #C8CFDB}.entity-score-card.game-score.quality-na strong{color:#8A93A8}.entity-score-card.game-score.quality-na small{color:#8A93A8}
 .game-score-color-legend{gap:5px!important}.game-score-color-legend i{display:inline-block;width:8px;height:8px;border-radius:999px;margin-left:5px}.game-score-color-legend i:first-child{margin-left:0}.game-score-color-legend i.good{background:#2BBF78}.game-score-color-legend i.watch{background:#F0A326}.game-score-color-legend i.weak{background:#D9485D}
+
+/* v0.39 — Separate legends for Market Score and SAVA Fit. */
+.game-score-color-legend.split{display:inline-flex!important;align-items:flex-start!important;gap:8px!important;flex-wrap:wrap}.game-score-color-legend.split>span{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:8px;background:#fff;border:1px solid #E3E8F1}.game-score-color-legend.split>span b{color:#03041C}.game-score-color-legend.split i{margin-left:4px}.game-score-color-legend.split i:first-of-type{margin-left:0}

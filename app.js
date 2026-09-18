@@ -1218,21 +1218,127 @@
     modalRoot.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeDrilldown);modalRoot.querySelector('[data-drill-edit]').onclick=()=>{closeDrilldown();openProject(id);};
   }
 
+  function gameEffectiveSavaScore100(g){
+    const fit5=gameSavaFitEffective(g);
+    return fit5===null?null:Math.round(fit5*20*10)/10;
+  }
+  function identityScoreBar(value,type='market'){
+    const n=num(value),w=n===null?0:Math.max(0,Math.min(100,n));
+    const label=type==='sava'?'SAVA':'Market';
+    return `<div class="identity-score ${type}" title="${n===null?'Chưa đủ dữ liệu':`${label} ${fmt(n,1)}/100`}"><strong>${n===null?'—':fmt(n,1)}</strong><span><i style="width:${w}%"></i></span></div>`;
+  }
+  function safeHttpUrl(value){
+    const raw=String(value||'').trim();if(!raw)return '';
+    try{const u=new URL(raw);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}
+  }
+  function externalActionLink(label,value){
+    const url=safeHttpUrl(value);return url?`<a class="ghost quick-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`:'';
+  }
+  function gameMarketRecord(g){
+    const mechanic=intake(g,'Mechanic');
+    const m=(db.market||[]).find(x=>mechanicNamesMatch(mechanic,x.Mechanic));
+    const insight=m?marketAnalytics(db.market||[]).find(x=>x.m.Mechanic_ID===m.Mechanic_ID):null;
+    return {market:m,insight};
+  }
+  function gameLinkedRecords(g){
+    const deals=(db.deals||[]).filter(x=>x.gameId===g.id).map(dealInitialDefaults);
+    const deal=deals.find(x=>x.status==='Đã ký')||deals[0]||null;
+    const leads=(db.sourcing||[]).filter(x=>x.gameId===g.id);
+    const sourcing=leads.find(x=>sourcingStatus(x)==='Đang xử lý')||leads[0]||null;
+    let partnerId=deal?.partnerId||sourcing?.partnerId||g?.partnerId||'';
+    let partner=partnerId?byId(db.partners,partnerId):null;
+    if(!partner){
+      const studioKey=String(intake(g,'Studio')||'').trim().toLowerCase();
+      partner=(db.partners||[]).find(p=>String(profile(p,'Tên Partner / Studio')||'').trim().toLowerCase()===studioKey)||null;
+      if(partner)partnerId=partner.id;
+    }
+    return {deal,sourcing,partner,partnerId};
+  }
+  function gameRelatedPartnerGames(partner){
+    if(!partner)return [];
+    const ids=new Set();
+    (db.deals||[]).forEach(d=>{if(d.partnerId===partner.id&&d.gameId)ids.add(d.gameId);});
+    (db.sourcing||[]).forEach(s=>{if(s.partnerId===partner.id&&s.gameId)ids.add(s.gameId);});
+    const partnerName=String(profile(partner,'Tên Partner / Studio')||'').trim().toLowerCase();
+    (db.games||[]).forEach(g=>{if(partnerName&&String(intake(g,'Studio')||'').trim().toLowerCase()===partnerName)ids.add(g.id);});
+    return [...ids].map(id=>byId(db.games,id)).filter(Boolean);
+  }
+  function openGameSavaFitDrilldown(id){
+    const g=byId(db.games,id);if(!g)return;
+    const auto=gameSavaFitDerived(g),override5=gameOverrideScore(g,'savaFit'),effective100=gameEffectiveSavaScore100(g);
+    const present=auto.components.filter(x=>x.value!==null),adjustedWeight=present.length?100/present.length:0;
+    const rows=auto.components.map(c=>drilldownMetricRow(c.label,c.value===null?null:c.value*20,{weight:c.value===null?null:adjustedWeight,contribution:c.value===null?null:c.value*20*adjustedWeight/100,detail:`Điểm nguồn ${c.value===null?'—':fmt(c.value,1)}/5 · 07_PUBLISHING_INTAKE`,status:c.value===null?'Chưa có evidence':''})).join('');
+    const confidence=num(intake(g,'Fit_Confidence_1_5'));
+    const evidence=g.scorecard?.overrideEvidence||'';
+    modalRoot.innerHTML=`<div class="modal-backdrop drilldown-backdrop"><div class="modal wide drilldown-modal game-score-modal"><div class="modal-head"><div><span class="eyebrow-mini">LỰA CHỌN TRÒ CHƠI · SAVA FIT BREAKDOWN</span><h2>${esc(intake(g,'Game_Title')||g.id)}</h2><p>Giải thích điểm phù hợp với SAVA và evidence đứng sau từng thành phần.</p></div><button class="icon-btn" data-close>×</button></div><div class="modal-body"><div class="game-score-hero sava"><div><span>Phù hợp với SAVA</span><strong>${effective100===null?'—':fmt(effective100,1)}</strong><em>/100</em></div><div class="game-score-hero-meta"><span>AUTO <b>${auto.score===null?'—':fmt(auto.score,1)+'/100'}</b></span><span>Override <b>${override5===null?'Không':fmt(override5*20,1)+'/100'}</b></span><span>Coverage <b>${auto.coverage}/7</b></span></div></div><div class="drill-grid-main"><section><div class="drill-section-head"><h3>7 tiêu chí SAVA Publishing Fit</h3><small>Các tiêu chí có dữ liệu được lấy trung bình; điểm 1–5 được quy đổi ×20 sang /100.</small></div><div class="drill-metric-list">${rows}</div><div class="score-formula-card"><b>Cách tính</b><code>AUTO Fit = Trung bình các tiêu chí có evidence × 20</code><p>${override5!==null?'Điểm đang dùng là Override vì có evidence tốt hơn nguồn AUTO.':'Không có Override; hệ thống đang dùng điểm AUTO.'}</p></div></section><aside><div class="drill-source-card"><h3>Evidence & nguồn</h3><div class="drill-source-grid"><div><span>Độ tin cậy Fit</span><b>${confidence===null?'—':fmt(confidence,1)+'/5'}</b></div><div><span>Nguồn</span><b>07_PUBLISHING_INTAKE</b></div><div><span>Override cập nhật</span><b>${g.scorecard?.overrideUpdatedAt?esc(String(g.scorecard.overrideUpdatedAt).slice(0,10)):'—'}</b></div><div><span>Hard Gate</span><b>${esc(gameHardGate(g))}</b></div></div>${evidence?`<div class="drill-evidence-note"><span>Evidence / lý do Override</span><p>${esc(evidence)}</p></div>`:''}${g.scorecard?.decisionNotes?`<div class="drill-evidence-note"><span>Decision notes</span><p>${esc(g.scorecard.decisionNotes)}</p></div>`:''}</div><div class="drill-source-card"><h3>Data lineage</h3><p>Đây là <b>điểm phù hợp nội bộ của SAVA</b>, không phải Market Score. Điểm này đi vào Pre-Scan với trọng số <b>15%</b>.</p></div></aside></div></div><div class="modal-foot"><button class="ghost" data-close>Đóng</button><button class="ghost" data-game-preview>Hồ sơ Game</button><button class="primary" data-game-edit>Chỉnh sửa dữ liệu Fit</button></div></div></div>`;
+    modalRoot.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>modalRoot.innerHTML='');
+    modalRoot.querySelector('[data-game-preview]').onclick=()=>openGameQuickView(id);
+    modalRoot.querySelector('[data-game-edit]').onclick=()=>{modalRoot.innerHTML='';openGame(id);};
+  }
+  function openGameMarketScoreDrilldown(id){
+    const g=byId(db.games,id);if(!g)return;const d=gameDerived(g);
+    const defs=[
+      ['Market Size','marketSize',20,'Quy mô thị trường'],
+      ['Growth / Momentum','growth',20,'Đà tăng trưởng'],
+      ['Entry Accessibility','entryAccess',25,'Mức độ có thể thâm nhập'],
+      ['Market Monetization','marketMonetization',20,'Khả năng kiếm tiền'],
+      ['UA / Creative Scalability','marketUaScalability',15,'UA benchmark / khả năng scale creative']
+    ];
+    const available=defs.filter(([,key])=>gameEffectiveScore(g,key)!==null),wsum=available.reduce((s,x)=>s+x[2],0);
+    const rows=defs.map(([label,key,weight,detail])=>{const eff=gameEffectiveScore(g,key),auto=gameAutoScore(g,key),ovr=gameOverrideScore(g,key);return drilldownMetricRow(label,eff===null?null:eff*20,{weight:eff===null||!wsum?null:weight/wsum*100,contribution:eff===null||!wsum?null:eff*20*weight/wsum,detail:`${detail} · AUTO ${auto===null?'—':fmt(auto,1)}/5 · Override ${ovr===null?'—':fmt(ovr,1)}/5`,status:gameScoreSource(g,key)});}).join('');
+    const {market,insight}=gameMarketRecord(g);
+    const raw=market?`<div class="drill-source-grid market-evidence-grid"><div><span>Downloads 30D</span><b>${fmt(market.Downloads_30d,0)}</b></div><div><span>Revenue 30D</span><b>${money(market.Revenue_30d_USD)}</b></div><div><span>DL Growth 3M</span><b>${market.DL_Growth_3m==null?'—':pct(market.DL_Growth_3m,1)}</b></div><div><span>Revenue Growth 3M</span><b>${market.Rev_Growth_3m==null?'—':pct(market.Rev_Growth_3m,1)}</b></div><div><span>RPD</span><b>${market.Revenue_per_Download_SAME_COHORT==null?'—':'$'+fmt(market.Revenue_per_Download_SAME_COHORT,2)}</b></div><div><span>CPI median</span><b>${market.UA_Benchmark?.CPI_Median==null?'—':'$'+fmt(market.UA_Benchmark.CPI_Median,2)}</b></div></div>`:'<div class="drill-warning">Chưa map được record Phân tích thị trường theo mechanic hiện tại.</div>';
+    modalRoot.innerHTML=`<div class="modal-backdrop drilldown-backdrop"><div class="modal wide drilldown-modal game-score-modal"><div class="modal-head"><div><span class="eyebrow-mini">LỰA CHỌN TRÒ CHƠI · MARKET SCORE BREAKDOWN</span><h2>${esc(intake(g,'Game_Title')||g.id)}</h2><p>Market Score là lớp đánh giá thị trường của candidate; tách biệt hoàn toàn với SAVA Fit.</p></div><button class="icon-btn" data-close>×</button></div><div class="modal-body"><div class="game-score-hero market"><div><span>Sức hấp dẫn thị trường của Game</span><strong>${d.market===null?'—':fmt(d.market,1)}</strong><em>/100</em></div><div class="game-score-hero-meta"><span>Evidence <b>${d.marketEvidenceCount}/5</b></span><span>Mechanic <b>${esc(intake(g,'Mechanic')||'—')}</b></span><span>Nguồn <b>Phân tích thị trường</b></span></div></div><div class="drill-grid-main"><section><div class="drill-section-head"><h3>5 cấu phần Market Score</h3><small>Cần tối thiểu 3/5 nhóm. Khi thiếu metric, trọng số được tự chia lại trên các nhóm có dữ liệu.</small></div><div class="drill-metric-list">${rows}</div><div class="score-formula-card"><b>Cách tính</b><code>Market Score = Σ(Điểm thành phần / 5 × trọng số điều chỉnh)</code><p>Trọng số gốc: Size 20% · Growth 20% · Entry 25% · Monetization 20% · UA 15%.</p></div></section><aside><div class="drill-source-card"><h3>Evidence thị trường</h3>${raw}${insight?`<div class="drill-evidence-note"><span>Định hướng Market</span><p><b>${esc(insight.direction.label)}</b> · Market Attractiveness ${insight.score===null?'—':fmt(insight.score,1)}/100</p></div>`:''}</div><div class="drill-source-card"><h3>Data lineage</h3><p><b>Market Score</b> cho candidate dùng các score 1–5 từ nguồn Market/Competition/UA. <b>SAVA Fit</b> là score riêng và chỉ được ghép ở Pre-Scan.</p></div></aside></div></div><div class="modal-foot"><button class="ghost" data-close>Đóng</button>${market?'<button class="ghost" data-market-record>Mở Phân tích thị trường</button>':''}<button class="ghost" data-game-preview>Hồ sơ Game</button><button class="primary" data-game-edit>Chỉnh sửa Score / Override</button></div></div></div>`;
+    modalRoot.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>modalRoot.innerHTML='');
+    const marketBtn=modalRoot.querySelector('[data-market-record]');if(marketBtn)marketBtn.onclick=()=>{modalRoot.innerHTML='';openMarket(market.Mechanic_ID);};
+    modalRoot.querySelector('[data-game-preview]').onclick=()=>openGameQuickView(id);
+    modalRoot.querySelector('[data-game-edit]').onclick=()=>{modalRoot.innerHTML='';openGame(id);};
+  }
+  function openPartnerQuickView(id){
+    const p=byId(db.partners,id);if(!p)return;const d=partnerDerived(p),rs=partnerRiskStats(id),deal=partnerPrimaryDeal(id),commercial=dealCommercialSnapshot(deal),games=gameRelatedPartnerGames(p);
+    const gameRows=games.length?games.slice(0,6).map(g=>`<button type="button" class="entity-mini-row" data-preview-related-game="${esc(g.id)}"><span><b>${esc(intake(g,'Game_Title')||g.id)}</b><small>${esc(intake(g,'Mechanic')||'—')}</small></span><strong>${gameEffectiveSavaScore100(g)===null?'—':fmt(gameEffectiveSavaScore100(g),1)}</strong><i>→</i></button>`).join(''):'<div class="empty compact">Chưa map Game/Candidate.</div>';
+    modalRoot.innerHTML=`<div class="modal-backdrop drilldown-backdrop"><div class="modal wide entity-quick-modal"><div class="modal-head"><div><span class="eyebrow-mini">HỒ SƠ ĐỐI TÁC · QUICK VIEW</span><h2>${esc(profile(p,'Tên Partner / Studio')||p.id)}</h2><p>${esc(p.id)} · ${esc(profile(p,'Quốc gia')||'—')} · ${esc(profile(p,'Genre chính')||'—')}</p></div><button class="icon-btn" data-close>×</button></div><div class="modal-body"><div class="entity-hero-grid"><button type="button" class="entity-score-card sava" data-partner-fit><span>Phù hợp /100</span><strong>${d.fit===null?'—':fmt(d.fit,1)}</strong><small>Xem breakdown ↗</small></button><div class="entity-score-card neutral"><span>Tiềm lực sản xuất</span><strong>${d.productionPotential?.overall===null?'—':fmt(d.productionPotential?.overall,1)}</strong><small>${esc(d.productionPotential?.maturity||'—')}</small></div><div class="entity-score-card neutral"><span>Hard Gate</span><strong class="text-size-sm">${esc(d.hard)}</strong><small>Evidence gate: ${esc(d.minimumGate)}</small></div><div class="entity-score-card risk"><span>Risk đang mở</span><strong>${rs.open.length}</strong><small>${rs.high.length} risk cao</small></div></div><div class="entity-quick-grid"><section class="entity-section"><h3>Hợp tác & Deal</h3><div class="entity-field-grid"><div><span>Trạng thái</span><b>${esc(profile(p,'Trạng thái')||'—')}</b></div><div><span>Mô hình</span><b>${esc(commercial?.dealModel||profile(p,'Mô hình hợp tác tài chính')||'—')}</b></div><div><span>SAVA / Đối tác</span><b>${commercial?.sava!==null&&commercial?.sava!==undefined?`${pct(commercial.sava,0)} / ${pct(commercial.partner,0)}`:'—'}</b></div><div><span>UA</span><b>${esc(commercial?.uaCommitment||profile(p,'Cam kết UA / Marketing Spend')||'—')}</b></div></div>${commercial?.uaCondition?`<div class="entity-note"><span>Điều kiện UA</span><p>${esc(commercial.uaCondition)}</p></div>`:''}</section><section class="entity-section"><h3>Game / Candidate liên quan</h3><div class="entity-mini-list">${gameRows}</div></section></div></div><div class="modal-foot"><button class="ghost" data-close>Đóng</button>${deal?'<button class="ghost" data-open-linked-deal>Mở Deal</button>':''}<button class="primary" data-edit-partner>Chỉnh sửa đối tác</button></div></div></div>`;
+    modalRoot.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>modalRoot.innerHTML='');
+    modalRoot.querySelector('[data-partner-fit]').onclick=()=>openPartnerFitDrilldown(id);
+    modalRoot.querySelectorAll('[data-preview-related-game]').forEach(b=>b.onclick=()=>openGameQuickView(b.dataset.previewRelatedGame));
+    const dbtn=modalRoot.querySelector('[data-open-linked-deal]');if(dbtn)dbtn.onclick=()=>{modalRoot.innerHTML='';openDeal(deal.id);};
+    modalRoot.querySelector('[data-edit-partner]').onclick=()=>{modalRoot.innerHTML='';openPartner(id);};
+  }
+  function openGameQuickView(id){
+    const g=byId(db.games,id);if(!g)return;const d=gameDerived(g),sava=gameEffectiveSavaScore100(g),links=gameLinkedRecords(g),{market}=gameMarketRecord(g);
+    const store=intake(g,'Store_URL'),build=intake(g,'Build_URL');
+    const linkActions=[externalActionLink('Mở Store',store),externalActionLink('Mở Build / APK',build)].filter(Boolean).join('');
+    const partnerHtml=links.partner?`<button type="button" class="entity-link-card" data-preview-linked-partner="${esc(links.partner.id)}"><span><b>${esc(profile(links.partner,'Tên Partner / Studio')||links.partner.id)}</b><small>${esc(links.partner.id)} · ${esc(profile(links.partner,'Trạng thái')||'—')}</small></span><i>→</i></button>`:`<div class="entity-unmapped"><b>${esc(intake(g,'Studio')||'Chưa có Partner')}</b><small>Chưa map được Partner ID trong hệ thống.</small></div>`;
+    modalRoot.innerHTML=`<div class="modal-backdrop drilldown-backdrop"><div class="modal wide entity-quick-modal game-quick-modal"><div class="modal-head"><div><span class="eyebrow-mini">HỒ SƠ GAME · QUICK VIEW</span><h2>${esc(intake(g,'Game_Title')||g.id)}</h2><p>${esc(g.id)} · ${esc(intake(g,'Mechanic')||'—')} · ${esc(intake(g,'Monetization_Model')||'—')}</p></div><button class="icon-btn" data-close>×</button></div><div class="modal-body"><div class="entity-hero-grid game"><button type="button" class="entity-score-card market" data-quick-market-score><span>Thị trường /100</span><strong>${d.market===null?'—':fmt(d.market,1)}</strong><small>Xem cấu thành ↗</small></button><button type="button" class="entity-score-card sava" data-quick-sava-score><span>Phù hợp SAVA /100</span><strong>${sava===null?'—':fmt(sava,1)}</strong><small>Xem cấu thành ↗</small></button><div class="entity-score-card neutral"><span>Pre-Scan /100</span><strong>${d.prescan===null?'—':fmt(d.prescan,1)}</strong><small>Hoàn thiện ${pct(d.preScanCompleteness,0)}</small></div><div class="entity-score-card ${d.hard==='FAIL'?'risk':'neutral'}"><span>Hard Gate</span><strong class="text-size-sm">${esc(d.hard)}</strong><small>${esc(d.selectionDecision)}</small></div></div><div class="entity-quick-grid"><section class="entity-section"><h3>Thông tin Game</h3><div class="entity-field-grid"><div><span>Candidate ID</span><b>${esc(g.id)}</b></div><div><span>Studio</span><b>${esc(intake(g,'Studio')||'—')}</b></div><div><span>Target GEO</span><b>${esc(intake(g,'Target_GEO')||'—')}</b></div><div><span>Build stage</span><b>${esc(intake(g,'Build_Stage')||'—')}</b></div><div><span>Owner</span><b>${esc(intake(g,'Owner')||'—')}</b></div><div><span>Product Evidence</span><b>${d.productEvidenceCount}/5 nhóm</b></div></div>${intake(g,'Theme_Hook')?`<div class="entity-note"><span>Theme / Hook</span><p>${esc(intake(g,'Theme_Hook'))}</p></div>`:''}${linkActions?`<div class="entity-link-actions">${linkActions}</div>`:'<div class="entity-note muted"><span>Link</span><p>Chưa có Store URL hoặc Build/APK URL.</p></div>'}</section><section class="entity-section"><h3>Đối tác & luồng xử lý</h3>${partnerHtml}<div class="entity-field-grid compact"><div><span>Deal</span><b>${esc(links.deal?.sourceDealId||links.deal?.id||'Chưa link')}</b></div><div><span>Tìm kiếm cơ hội</span><b>${esc(links.sourcing?.id||'Chưa link')}</b></div><div><span>Market record</span><b>${esc(market?.Mechanic_ID||'Chưa map')}</b></div><div><span>Kết luận</span><b>${esc(d.selectionDecision)}</b></div></div>${g.scorecard?.decisionNotes?`<div class="entity-note"><span>Decision notes</span><p>${esc(g.scorecard.decisionNotes)}</p></div>`:''}</section></div></div><div class="modal-foot"><button class="ghost" data-close>Đóng</button>${links.deal?'<button class="ghost" data-quick-deal>Mở Deal</button>':''}${links.sourcing?'<button class="ghost" data-quick-sourcing>Mở Lead</button>':''}<button class="primary" data-edit-game>Chỉnh sửa Game</button></div></div></div>`;
+    modalRoot.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>modalRoot.innerHTML='');
+    modalRoot.querySelector('[data-quick-market-score]').onclick=()=>openGameMarketScoreDrilldown(id);
+    modalRoot.querySelector('[data-quick-sava-score]').onclick=()=>openGameSavaFitDrilldown(id);
+    modalRoot.querySelectorAll('[data-preview-linked-partner]').forEach(b=>b.onclick=()=>openPartnerQuickView(b.dataset.previewLinkedPartner));
+    const dealBtn=modalRoot.querySelector('[data-quick-deal]');if(dealBtn)dealBtn.onclick=()=>{modalRoot.innerHTML='';openDeal(links.deal.id);};
+    const sourcingBtn=modalRoot.querySelector('[data-quick-sourcing]');if(sourcingBtn)sourcingBtn.onclick=()=>{modalRoot.innerHTML='';openSourcing(links.sourcing.id);};
+    modalRoot.querySelector('[data-edit-game]').onclick=()=>{modalRoot.innerHTML='';openGame(id);};
+  }
+
   function renderGames(){
     setHeader('Lựa chọn trò chơi','4 · Lựa chọn Game trước Test · Market Fit + Product Fit + Marketing Fit + Business Potential');
     const derived=db.games.map(g=>({g,d:gameDerived(g)}));
     const rows=db.games.filter(g=>includesSearch(g.id,intake(g,'Game_Title'),intake(g,'Studio'),intake(g,'Mechanic'),gameDerived(g).selectionDecision,gameDerived(g).recommendation)).map(g=>{
-      const d=gameDerived(g),sf=gameSavaFitDerived(g);
-      return `<tr><td><button class="linkish" data-open-game="${g.id}">${g.id}</button></td><td><b>${esc(intake(g,'Game_Title'))}</b><div class="small muted">${esc(intake(g,'Studio')||'')}</div></td><td>${esc(intake(g,'Mechanic')||'—')}</td><td>${badge(intake(g,'Monetization_Model')||'—')}</td><td>${sf.score===null?'—':marketScoreBar(sf.score)}</td><td class="num">${d.market??g.scorecard?.marketScore??'—'}</td><td class="num"><b>${d.prescan??'—'}</b><div class="small muted">Hoàn thiện ${pct(d.preScanCompleteness,0)}</div></td><td>${gameEvidenceStatusHtml(g,d)}</td><td class="num">${d.stage==='POST-TEST'?(d.final??'—'):'—'}</td><td>${badge(d.hard)}</td><td>${gameSelectionDecisionHtml(d)}</td><td><button class="ghost" data-open-game="${g.id}">Edit</button></td></tr>`;
+      const d=gameDerived(g),sava=gameEffectiveSavaScore100(g),links=gameLinkedRecords(g);
+      const studio=intake(g,'Studio')||'—';
+      const studioHtml=links.partner?`<button type="button" class="entity-inline-link" data-preview-partner="${esc(links.partner.id)}" title="Xem hồ sơ đối tác">${esc(studio)}</button>`:`<span>${esc(studio)}</span>`;
+      const savaScore=sava===null?'—':`<button type="button" class="score-drill-trigger sava" data-open-game-sava-score="${esc(g.id)}" title="Xem cấu thành điểm SAVA Fit">${identityScoreBar(sava,'sava')}<span>Xem cấu thành ↗</span></button>`;
+      const marketScore=d.market===null?'—':`<button type="button" class="score-drill-trigger market" data-open-game-market-score="${esc(g.id)}" title="Xem cấu thành Market Score">${identityScoreBar(d.market,'market')}<span>Xem cấu thành ↗</span></button>`;
+      return `<tr><td><button class="linkish entity-entry" data-preview-game="${esc(g.id)}" title="Xem hồ sơ Game">${esc(g.id)}</button></td><td><button type="button" class="game-name-entry" data-preview-game="${esc(g.id)}" title="Xem hồ sơ Game">${esc(intake(g,'Game_Title')||g.id)}</button><div class="small muted">${studioHtml}</div></td><td>${esc(intake(g,'Mechanic')||'—')}</td><td>${badge(intake(g,'Monetization_Model')||'—')}</td><td>${savaScore}</td><td>${marketScore}</td><td class="num"><b>${d.prescan??'—'}</b><div class="small muted">Hoàn thiện ${pct(d.preScanCompleteness,0)}</div></td><td>${gameEvidenceStatusHtml(g,d)}</td><td class="num">${d.stage==='POST-TEST'?(d.final??'—'):'—'}</td><td>${badge(d.hard)}</td><td>${gameSelectionDecisionHtml(d)}</td><td><button class="ghost" data-open-game="${esc(g.id)}">Edit</button></td></tr>`;
     });
     const proceed=derived.filter(({d})=>/^Tiếp tục$/.test(d.selectionDecision)).length;
     const conditional=derived.filter(({d})=>/Tiếp tục có điều kiện/.test(d.selectionDecision)).length;
     const withEvidence=derived.filter(({d})=>d.stage==='POST-TEST').length;
     const gateOpen=derived.filter(({d})=>d.hard!=='PASS').length;
     const workbookGuide=`<div class="notice"><b>Cách đọc đúng workbook:</b> <b>Pre-Scan</b> là quyết định lựa chọn Game trước Test. Nếu Game/Candidate đã có ít nhất <b>2/5 nhóm Product Evidence thực tế</b> (UA Test, Retention, Engagement, Monetization Test, Gamefeel Test), workbook tự bật nhánh <b>POST-TEST</b> để chấm thêm một lớp evidence. Trong Publishing OS, lớp này được hiển thị là <b>“Có Product Evidence”</b> và không đồng nghĩa Test phải xảy ra trước Deal. Funnel vận hành vẫn giữ <b>Deal → Test</b>. Product Evidence có thể là data thực tế đã có của chính Game/Candidate hoặc data Test mới; không dùng benchmark thị trường để thay thế.</div>`;
+    const drillGuide=`<div class="game-drill-guide"><span><i class="dot market"></i><b>Thị trường</b> = mức hấp dẫn của market/candidate</span><span><i class="dot sava"></i><b>Phù hợp SAVA</b> = khả năng SAVA phát hành tốt candidate</span><span>Click <b>score</b> để xem cấu thành + evidence · Click <b>Tên/ID Game</b> để xem hồ sơ nhanh.</span></div>`;
     content.innerHTML=`<div class="grid kpis">${kpi('Game đang đánh giá',db.games.length)}${kpi('Có thể đi tiếp',proceed+conditional,`${proceed} tiếp tục · ${conditional} có điều kiện`)}${kpi('Có Product Evidence',withEvidence,'Ít nhất 2/5 nhóm evidence thực tế')}${kpi('Hard Gate cần xử lý',gateOpen)}</div>
       ${workbookGuide}
-      ${panel('Game decision pipeline',table(['ID','Game','Mechanic','Monetization','SAVA Fit /100','Market /100','Pre-Scan /100','Product Evidence','Điểm theo Evidence /100','Hard Gate','Kết luận lựa chọn',''],rows),'Kết luận chính của tab là quyết định Pre-Scan trước Test. Product Evidence sẵn có được dùng như lớp evidence bổ sung, theo đúng logic 10_SCORECARD.',`<button class="primary" data-action="add-game">+ Game</button>`)}
+      ${panel('Game decision pipeline',drillGuide+table(['ID','Game / Đối tác','Mechanic','Monetization','Phù hợp SAVA /100','Thị trường /100','Pre-Scan /100','Product Evidence','Điểm theo Evidence /100','Hard Gate','Kết luận lựa chọn',''],rows,'game-decision-table'),'Score tổng hợp có thể drill-down tới cấu thành, trọng số và evidence. Tên/ID Game mở hồ sơ nhanh; nút Edit dùng để cập nhật dữ liệu.',`<button class="primary" data-action="add-game">+ Game</button>`)}
       ${panel('Logic chấm điểm theo workbook',`<div class="three"><div class="rule-card"><h3>Pre-Scan · Quyết định chính</h3><p>Market <b>45%</b> · Publishing Readiness <b>20%</b> · Deal Economics <b>20%</b> · SAVA Fit <b>15%</b>.</p><p class="small muted">Market Score cần tối thiểu 3/5 market evidence. Pre-Scan dùng để quyết định có nên tiếp tục Deal/Test hay không.</p></div><div class="rule-card"><h3>Có Product Evidence · Lớp bổ sung</h3><p>Market <b>25%</b> · Product Evidence <b>35%</b> · Readiness <b>15%</b> · Deal <b>15%</b> · SAVA Fit <b>10%</b>.</p><p class="small muted">Tự bật khi có ≥2/5 evidence của chính candidate. Workbook gọi trạng thái này là POST-TEST.</p></div><div class="rule-card"><h3>Ngưỡng nguồn</h3><p>Pre-Scan: Direct <b>&gt;75</b> · Conditional <b>≥60</b>. Evidence: Greenlight <b>≥80</b> · Test-more <b>≥68</b>. Data completeness <b>≥80%</b>. Hard Gate FAIL luôn override.</p></div></div>`,'Giữ nguyên trọng số/ngưỡng của 10_SCORECARD; UI tách quyết định lựa chọn trước Test khỏi lớp Product Evidence để không hiểu nhầm workflow.')}`;
     bindOpeners();
   }
@@ -1464,6 +1570,10 @@
     document.querySelectorAll('[data-open-deal-risk]').forEach(b=>b.onclick=()=>openDealRiskDrilldown(b.dataset.openDealRisk));
     document.querySelectorAll('[data-open-operation-gate]').forEach(b=>b.onclick=()=>openOperationGateDrilldown(b.dataset.openOperationGate));
     document.querySelectorAll('[data-open-publisher]').forEach(b=>b.onclick=()=>openPublisher(b.dataset.openPublisher));
+    document.querySelectorAll('[data-preview-game]').forEach(b=>b.onclick=()=>openGameQuickView(b.dataset.previewGame));
+    document.querySelectorAll('[data-preview-partner]').forEach(b=>b.onclick=()=>openPartnerQuickView(b.dataset.previewPartner));
+    document.querySelectorAll('[data-open-game-sava-score]').forEach(b=>b.onclick=()=>openGameSavaFitDrilldown(b.dataset.openGameSavaScore));
+    document.querySelectorAll('[data-open-game-market-score]').forEach(b=>b.onclick=()=>openGameMarketScoreDrilldown(b.dataset.openGameMarketScore));
     document.querySelectorAll('[data-open-game]').forEach(b=>b.onclick=()=>openGame(b.dataset.openGame));
     document.querySelectorAll('[data-open-sourcing]').forEach(b=>b.onclick=()=>openSourcing(b.dataset.openSourcing));
     document.querySelectorAll('[data-open-project]').forEach(b=>b.onclick=()=>openProject(b.dataset.openProject));
